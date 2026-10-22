@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-pink: #FCE7F0;
+    --brand-pink-dark: #F592AB;
+    --brand-chocolate: #3D2314;
+    --brand-chocolate-light: #5A3A27;
+    --brand-cream: #FAF5EE;
+    --brand-gold: #D4AF37;
+  }
+
+  body {
+    background-color: #FFFDF9;
+    color: #2C180B;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbar in Chocolate & Baby Pink */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAF5EE;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DFCFC4;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #C7ADA0;
+}
+
+/* Glassmorphic Utilities */
+.glass-pink {
+  background: rgba(253, 239, 244, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(251, 188, 212, 0.4);
+}
+
+.glass-white {
+  background: rgba(255, 253, 249, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(239, 233, 228, 0.8);
+}
+
+.glass-chocolate {
+  background: rgba(44, 24, 11, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(117, 78, 57, 0.3);
+}
+
+/* Gradient Texts & Backgrounds */
+.gradient-text-chocolate {
+  background: linear-gradient(135deg, #2C180B 0%, #5A3A27 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-text-pink {
+  background: linear-gradient(135deg, #D83E7A 0%, #EE6499 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gradient-bg-hero {
+  background: radial-gradient(circle at 50% 0%, #FDEFF4 0%, #FFF7F9 45%, #FFFDF9 100%);
+}
+
+.gradient-bg-ai {
+  background: linear-gradient(135deg, #FFF0F5 0%, #FDE2E8 50%, #FAF5EE 100%);
+}
+
+.gradient-bg-chocolate {
+  background: linear-gradient(145deg, #2C180B 0%, #3D2314 50%, #1B0E06 100%);
+}

@@ -1,0 +1,173 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         String         @default("USER")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  cartItems    CartItem[]
+  wishlist     WishlistItem[]
+  priceAlerts  PriceAlert[]
+}
+
+model Product {
+  id                      String   @id
+  productGroupId          String
+  name                    String
+  brand                   String
+  category                String
+  subCategory             String
+  description             String @db.Text
+  image                   String
+  galleryImagesJson       String @db.LongText   @default("[]")
+  currentPrice            Float
+  originalPrice           Float
+  discountPercent         Float
+  shippingFee             Float
+  finalEstimatedPrice     Float
+  rating                  Float
+  reviewCount             Int
+  deliveryEstimate        String
+  deliveryDays            Int
+  store                   String
+  inStock                 Boolean  @default(true)
+  seller                  String
+  sellerTrust             String
+  sellerTrustScore        Int
+  returnPolicy            String
+  warranty                String
+
+  infinityScore           Int
+  infinityScoreBreakdown  String @db.LongText   // JSON string
+  dealStatus              String
+  dealAnalysisText        String @db.Text
+  recentAveragePrice      Float
+  lowestRecordedPrice     Float
+  highestRecordedPrice    Float
+  priceHistory            String @db.LongText   // JSON string
+  buyRecommendation       String
+  buyRecommendationReason String @db.Text
+  aiReviewSummary         String @db.LongText   // JSON string
+  ecoScore                Int
+  ecoFactors              String @db.LongText   // JSON string
+  specs                   String @db.LongText   // JSON string
+  tags                    String @db.LongText   // JSON string
+  unitPriceText           String?
+  unitPriceValue          Float?
+  unitType                String?
+  twinOffers              String? @db.LongText  // JSON string
+  compatibleItems         String? @db.LongText  // JSON string
+  cheaperAlternativeId    String?
+  betterRatedAlternativeId String?
+  premiumAlternativeId    String?
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  cartItems               CartItem[]
+  wishlistItems           WishlistItem[]
+  priceAlerts             PriceAlert[]
+}
+
+model CartItem {
+  id               String   @id @default(uuid())
+  userId           String?
+  guestId          String?
+  productId        String
+  selectedStore    String
+  selectedPrice    Float
+  selectedShipping Float
+  quantity         Int      @default(1)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([guestId])
+}
+
+model WishlistItem {
+  id        String   @id @default(uuid())
+  userId    String?
+  guestId   String?
+  productId String
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([guestId])
+}
+
+model PriceAlert {
+  id           String   @id @default(uuid())
+  userId       String?
+  guestId      String?
+  productId    String
+  productName  String
+  productImage String
+  currentPrice Float
+  targetPrice  Float
+  store        String
+  status       String   @default("ACTIVE") // ACTIVE, TRIGGERED, CANCELLED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([guestId])
+}
+
+model ShoppingMission {
+  id           String   @id
+  title        String
+  icon         String
+  tagline      String
+  targetBudget Float
+  description  String @db.Text
+  category     String
+  itemsJson    String @db.LongText   // JSON representation of mission items
+  tipsJson     String @db.LongText   // JSON array of strings
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SharedList {
+  id        String           @id @default(uuid())
+  name      String
+  createdBy String
+  createdAt DateTime         @default(now())
+  items     SharedListItem[]
+}
+
+model SharedListItem {
+  id               String     @id @default(uuid())
+  listId           String
+  name             String
+  addedBy          String
+  category         String
+  matchedProductId String?
+  quantity         Int        @default(1)
+  isPurchased      Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+
+  list             SharedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@index([listId])
+}
