@@ -22,62 +22,62 @@ model User {
 }
 
 model Product {
-  id                      String   @id
-  productGroupId          String
-  name                    String
-  brand                   String
-  category                String
-  subCategory             String
-  description             String @db.Text
-  image                   String
-  galleryImagesJson       String @db.LongText   @default("[]")
-  currentPrice            Float
-  originalPrice           Float
-  discountPercent         Float
-  shippingFee             Float
-  finalEstimatedPrice     Float
-  rating                  Float
-  reviewCount             Int
-  deliveryEstimate        String
-  deliveryDays            Int
-  store                   String
-  inStock                 Boolean  @default(true)
-  seller                  String
-  sellerTrust             String
-  sellerTrustScore        Int
-  returnPolicy            String
-  warranty                String
+  id                       String   @id
+  productGroupId           String
+  name                     String
+  brand                    String
+  category                 String
+  subCategory              String
+  description              String   @db.Text
+  image                    String
+  galleryImagesJson        String   @db.LongText
+  currentPrice             Float
+  originalPrice            Float
+  discountPercent          Float
+  shippingFee              Float
+  finalEstimatedPrice      Float
+  rating                   Float
+  reviewCount              Int
+  deliveryEstimate         String
+  deliveryDays             Int
+  store                    String
+  inStock                  Boolean  @default(true)
+  seller                   String
+  sellerTrust              String
+  sellerTrustScore         Int
+  returnPolicy             String
+  warranty                 String
 
-  infinityScore           Int
-  infinityScoreBreakdown  String @db.LongText   // JSON string
-  dealStatus              String
-  dealAnalysisText        String @db.Text
-  recentAveragePrice      Float
-  lowestRecordedPrice     Float
-  highestRecordedPrice    Float
-  priceHistory            String @db.LongText   // JSON string
-  buyRecommendation       String
-  buyRecommendationReason String @db.Text
-  aiReviewSummary         String @db.LongText   // JSON string
-  ecoScore                Int
-  ecoFactors              String @db.LongText   // JSON string
-  specs                   String @db.LongText   // JSON string
-  tags                    String @db.LongText   // JSON string
-  unitPriceText           String?
-  unitPriceValue          Float?
-  unitType                String?
-  twinOffers              String? @db.LongText  // JSON string
-  compatibleItems         String? @db.LongText  // JSON string
-  cheaperAlternativeId    String?
+  infinityScore            Int
+  infinityScoreBreakdown   String   @db.LongText // JSON string
+  dealStatus               String
+  dealAnalysisText         String   @db.Text
+  recentAveragePrice       Float
+  lowestRecordedPrice      Float
+  highestRecordedPrice     Float
+  priceHistory             String   @db.LongText // JSON string
+  buyRecommendation        String
+  buyRecommendationReason  String   @db.Text
+  aiReviewSummary          String   @db.LongText // JSON string
+  ecoScore                 Int
+  ecoFactors               String   @db.LongText // JSON string
+  specs                    String   @db.LongText // JSON string
+  tags                     String   @db.LongText // JSON string
+  unitPriceText            String?
+  unitPriceValue           Float?
+  unitType                 String?
+  twinOffers               String?  @db.LongText // JSON string
+  compatibleItems          String?  @db.LongText // JSON string
+  cheaperAlternativeId     String?
   betterRatedAlternativeId String?
-  premiumAlternativeId    String?
+  premiumAlternativeId     String?
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  cartItems               CartItem[]
-  wishlistItems           WishlistItem[]
-  priceAlerts             PriceAlert[]
+  cartItems                CartItem[]
+  wishlistItems            WishlistItem[]
+  priceAlerts              PriceAlert[]
 }
 
 model CartItem {
@@ -140,10 +140,10 @@ model ShoppingMission {
   icon         String
   tagline      String
   targetBudget Float
-  description  String @db.Text
+  description  String   @db.Text
   category     String
-  itemsJson    String @db.LongText   // JSON representation of mission items
-  tipsJson     String @db.LongText   // JSON array of strings
+  itemsJson    String   @db.LongText // JSON representation of mission items
+  tipsJson     String   @db.LongText // JSON array of strings
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
