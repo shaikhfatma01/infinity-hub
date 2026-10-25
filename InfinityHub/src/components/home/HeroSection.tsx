@@ -29,7 +29,7 @@ export const HeroSection: React.FC = () => {
 
   // Typewriter effect for search bar
   useEffect(() => {
-    let timeout: NodeJS.Timeout;
+    let timeout: ReturnType<typeof setTimeout>;
     const currentFullText = exampleQueries[placeholderIndex];
 
     if (isTyping) {

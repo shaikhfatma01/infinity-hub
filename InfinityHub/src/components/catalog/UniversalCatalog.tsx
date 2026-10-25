@@ -25,7 +25,8 @@ export const UniversalCatalog: React.FC = () => {
     searchQuery, 
     setSearchQuery,
     handleSearchSubmit,
-    isSearching 
+    isSearching,
+    maxCatalogPrice
   } = useApp();
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -207,7 +208,7 @@ export const UniversalCatalog: React.FC = () => {
                 <input
                   type="range"
                   min="0"
-                  max="80000"
+                  max={maxCatalogPrice}
                   step="500"
                   value={filters.priceRange[1]}
                   onChange={(e) => updateFilter('priceRange', [filters.priceRange[0], Number(e.target.value)])}

@@ -21,6 +21,7 @@ export const VoiceSearchModal: React.FC = () => {
 
   useEffect(() => {
     if (isVoiceModalOpen) {
+      let recognitionRef: any = null;
       setIsListening(true);
       setTranscript('Listening... Speak now into your microphone');
 
@@ -47,6 +48,7 @@ export const VoiceSearchModal: React.FC = () => {
             setIsListening(false);
           };
 
+          recognitionRef = recognition;
           recognition.start();
         } catch (e) {
           // Fallback simulation
@@ -59,6 +61,11 @@ export const VoiceSearchModal: React.FC = () => {
         }, 2000);
         return () => clearTimeout(timer);
       }
+
+      // Stop the microphone when the modal closes or unmounts.
+      return () => {
+        try { recognitionRef?.abort(); } catch { /* already stopped */ }
+      };
     }
   }, [isVoiceModalOpen]);
 

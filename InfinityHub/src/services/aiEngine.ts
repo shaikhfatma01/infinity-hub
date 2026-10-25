@@ -1,5 +1,5 @@
-import { Product, FilterState, CartItem, StoreName } from '../types';
-import { MOCK_PRODUCTS } from '../data/mockProducts';
+import { Product, FilterState, CartItem, StoreName, StoreOffer } from '../types';
+import { getMockProduct } from '../data/mockLookup';
 
 export interface ParsedSearchQuery {
   rawQuery: string;
@@ -210,13 +210,29 @@ export interface CartOptimizationReport {
     currentStore: StoreName;
     currentPrice: number;
     recommendedStore: StoreName;
+    /** All-in price (item + shipping) at the recommended store. */
     recommendedPrice: number;
+    /** Item price at the recommended store, excluding shipping. */
+    recommendedBasePrice: number;
+    recommendedShipping: number;
     savings: number;
     reason: string;
   }[];
 }
 
-export function optimizeCart(items: CartItem[]): CartOptimizationReport {
+/** Merges a product's own twin offers with those of other listings in its product group. */
+function offersForProduct(product: Product, catalogue: Product[]): StoreOffer[] {
+  const merged: StoreOffer[] = [...(product.twinOffers ?? [])];
+  for (const sibling of catalogue) {
+    if (sibling.id === product.id || sibling.productGroupId !== product.productGroupId) continue;
+    for (const offer of sibling.twinOffers ?? []) {
+      if (!merged.some(m => m.store === offer.store)) merged.push(offer);
+    }
+  }
+  return merged;
+}
+
+export function optimizeCart(items: CartItem[], catalogue: Product[] = []): CartOptimizationReport {
   let originalTotal = 0;
   let optimizedTotal = 0;
   const optimizations: CartOptimizationReport['optimizations'] = [];
@@ -227,10 +243,11 @@ export function optimizeCart(items: CartItem[]): CartOptimizationReport {
 
     // Check if the product has twin offers on other stores
     const product = item.product;
-    if (product.twinOffers && product.twinOffers.length > 0) {
-      const bestOffer = product.twinOffers.reduce((best, cur) => {
+    const offers = offersForProduct(product, catalogue);
+    if (offers.length > 0) {
+      const bestOffer = offers.reduce((best, cur) => {
         return cur.finalPrice < best.finalPrice ? cur : best;
-      }, product.twinOffers[0]);
+      }, offers[0]);
 
       if (bestOffer && bestOffer.finalPrice < item.selectedPrice + item.selectedShipping) {
         const itemSavings = (item.selectedPrice + item.selectedShipping - bestOffer.finalPrice) * item.quantity;
@@ -241,8 +258,10 @@ export function optimizeCart(items: CartItem[]): CartOptimizationReport {
           currentPrice: item.selectedPrice + item.selectedShipping,
           recommendedStore: bestOffer.store,
           recommendedPrice: bestOffer.finalPrice,
+          recommendedBasePrice: bestOffer.price,
+          recommendedShipping: bestOffer.shippingFee,
           savings: itemSavings,
-          reason: `Found on ${bestOffer.store} for ₹${bestOffer.finalPrice} (${bestOffer.deliveryText})`
+          reason: `Found on ${bestOffer.store} for ₹${bestOffer.finalPrice.toLocaleString('en-IN')} (${bestOffer.deliveryText})`
         });
         optimizedTotal += bestOffer.finalPrice * item.quantity;
         continue;
@@ -275,35 +294,35 @@ export interface VisualMatchResult {
 
 export function simulateVisualSearch(imageQueryName: string): VisualMatchResult[] {
   const lower = imageQueryName.toLowerCase();
-  
+
   if (lower.includes('purse') || lower.includes('bag') || lower.includes('handbag')) {
     return [
-      { product: MOCK_PRODUCTS[0], similarityScore: 98, matchedVisualFeature: 'Black pebbled leather structure & gold buckle' },
-      { product: MOCK_PRODUCTS[1], similarityScore: 94, matchedVisualFeature: 'Dual handle satchel silhouette' }
+      { product: getMockProduct('prod-purse-myntra'), similarityScore: 98, matchedVisualFeature: 'Black pebbled leather structure & gold buckle' },
+      { product: getMockProduct('prod-purse-amazon'), similarityScore: 94, matchedVisualFeature: 'Dual handle satchel silhouette' }
     ];
   }
 
   if (lower.includes('shoe') || lower.includes('sneaker') || lower.includes('nike')) {
     return [
-      { product: MOCK_PRODUCTS[3], similarityScore: 97, matchedVisualFeature: 'Visible Air heel cushion & red athletic accents' }
+      { product: getMockProduct('prod-shoes-myntra'), similarityScore: 97, matchedVisualFeature: 'Visible Air heel cushion & red athletic accents' }
     ];
   }
 
   if (lower.includes('laptop') || lower.includes('screen') || lower.includes('asus')) {
     return [
-      { product: MOCK_PRODUCTS[2], similarityScore: 95, matchedVisualFeature: '15.6-inch thin bezel OLED chassis' }
+      { product: getMockProduct('prod-laptop-croma'), similarityScore: 95, matchedVisualFeature: '15.6-inch thin bezel OLED chassis' }
     ];
   }
 
   if (lower.includes('lamp') || lower.includes('decor') || lower.includes('light')) {
     return [
-      { product: MOCK_PRODUCTS[5], similarityScore: 96, matchedVisualFeature: 'Vintage glass lantern with rotary brass dimmer' }
+      { product: getMockProduct('prod-lamp-ikea'), similarityScore: 96, matchedVisualFeature: 'Vintage glass lantern with rotary brass dimmer' }
     ];
   }
 
   // Default fallback match
   return [
-    { product: MOCK_PRODUCTS[0], similarityScore: 92, matchedVisualFeature: 'Color palette & texture match' },
-    { product: MOCK_PRODUCTS[4], similarityScore: 89, matchedVisualFeature: 'Form factor and material geometry' }
+    { product: getMockProduct('prod-purse-myntra'), similarityScore: 92, matchedVisualFeature: 'Color palette & texture match' },
+    { product: getMockProduct('prod-blanket-flipkart'), similarityScore: 89, matchedVisualFeature: 'Form factor and material geometry' }
   ];
 }

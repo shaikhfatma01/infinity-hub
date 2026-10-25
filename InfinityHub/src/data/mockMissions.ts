@@ -11,7 +11,7 @@ export const MOCK_SHOPPING_MISSIONS: ShoppingMission[] = [
     category: 'College & Study Setup',
     description: 'A curated starter kit for college freshers and hostel life — ergonomic backpack, wireless ANC audio, study lamp, stainless water bottle, power bank, and smart grooming.',
     tips: [
-      'InfinityHub grouped your cart across 3 stores to save ₹1,300 on shipping and bundle discounts.',
+      'InfinityHub compares every item across stores and picks the lowest final price, shipping included.',
       'All electronics include 1+ year on-site manufacturer warranty.'
     ],
     items: [

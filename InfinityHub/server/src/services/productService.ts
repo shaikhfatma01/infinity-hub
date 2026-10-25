@@ -69,6 +69,43 @@ export function deserializeProduct(dbProduct: any): Product {
   };
 }
 
+const BUDGET_PATTERN = /(?:under|below|less than|within|max|budget of)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*)/i;
+const RATING_PATTERN = /(\d(?:\.\d)?)\s*(?:star|stars|\+|★)/i;
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'for', 'with', 'and', 'in', 'on', 'of', 'to', 'me', 'my', 'find', 'show', 'get',
+  'best', 'good', 'rating', 'rated', 'star', 'stars', 'under', 'below', 'within', 'max', 'budget',
+  'less', 'than', 'rs', 'inr', '₹',
+]);
+
+/**
+ * Splits a natural-language query such as "black purse under ₹1000 with 4+ rating"
+ * into structured constraints (budget, rating) and the remaining keywords.
+ */
+export function parseSearchQuery(query: string) {
+  let rest = query.toLowerCase().trim();
+
+  let maxBudget: number | undefined;
+  const budgetMatch = rest.match(BUDGET_PATTERN);
+  if (budgetMatch) {
+    maxBudget = parseInt(budgetMatch[1].replace(/,/g, ''), 10);
+    rest = rest.replace(budgetMatch[0], ' ');
+  }
+
+  let minRating: number | undefined;
+  const ratingMatch = rest.match(RATING_PATTERN);
+  if (ratingMatch) {
+    minRating = parseFloat(ratingMatch[1]);
+    rest = rest.replace(ratingMatch[0], ' ');
+  }
+
+  const tokens = rest
+    .split(/[^a-z0-9₹]+/i)
+    .map(t => t.trim())
+    .filter(t => t.length > 0 && !STOP_WORDS.has(t));
+
+  return { maxBudget, minRating, tokens };
+}
+
 export class ProductService {
   public async getProducts(filters: ProductQueryFilters) {
     const rawProducts = await prisma.product.findMany();
@@ -76,30 +113,18 @@ export class ProductService {
 
     // 1. Natural Language or Keyword Search
     if (filters.search && filters.search.trim()) {
-      const q = filters.search.toLowerCase().trim();
-
-      // Extract natural language budget if present: "under 1000", "below ₹60000"
-      const budgetMatch = q.match(/(?:under|below|less than|within|max|budget of)\s*(?:₹|rs\.?|inr)?\s*(\d+(?:,\d+)*)/i);
-      const nlBudget = budgetMatch ? parseInt(budgetMatch[1].replace(/,/g, ''), 10) : null;
-
-      // Extract rating if present: "4 star", "4.5★"
-      const ratingMatch = q.match(/(\d(?:\.\d)?)\s*(?:star|\+|★)/i);
-      const nlRating = ratingMatch ? parseFloat(ratingMatch[1]) : null;
+      const parsed = parseSearchQuery(filters.search);
 
       products = products.filter(p => {
-        const nameMatch = p.name.toLowerCase().includes(q);
-        const brandMatch = p.brand.toLowerCase().includes(q);
-        const catMatch = p.category.toLowerCase().includes(q);
-        const subCatMatch = p.subCategory.toLowerCase().includes(q);
-        const descMatch = p.description.toLowerCase().includes(q);
-        const tagMatch = p.tags.some(t => t.toLowerCase().includes(q));
+        if (parsed.maxBudget !== undefined && p.currentPrice > parsed.maxBudget) return false;
+        if (parsed.minRating !== undefined && p.rating < parsed.minRating) return false;
+        if (parsed.tokens.length === 0) return true;
 
-        let matchesKeyword = nameMatch || brandMatch || catMatch || subCatMatch || descMatch || tagMatch;
-
-        if (nlBudget && p.currentPrice > nlBudget) return false;
-        if (nlRating && p.rating < nlRating) return false;
-
-        return matchesKeyword;
+        const haystack = [p.name, p.brand, p.category, p.subCategory, p.description, ...p.tags]
+          .join(' ')
+          .toLowerCase();
+        // Every meaningful word of the query must appear somewhere on the product.
+        return parsed.tokens.every(token => haystack.includes(token));
       });
     }
 
@@ -165,7 +190,7 @@ export class ProductService {
 
     const total = products.length;
     const page = filters.page && filters.page > 0 ? filters.page : 1;
-    const limit = filters.limit && filters.limit > 0 ? filters.limit : 50;
+    const limit = Math.min(filters.limit && filters.limit > 0 ? filters.limit : 50, 200);
     const startIndex = (page - 1) * limit;
     const paginatedProducts = products.slice(startIndex, startIndex + limit);
 
@@ -175,7 +200,7 @@ export class ProductService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     };
   }

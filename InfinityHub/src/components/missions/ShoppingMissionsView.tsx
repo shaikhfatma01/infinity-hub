@@ -14,7 +14,14 @@ import {
 } from 'lucide-react';
 
 export const ShoppingMissionsView: React.FC = () => {
-  const { missions, startMission, setIsMissionsModalOpen } = useApp();
+  const { missions, startMission } = useApp();
+
+  // Flagship numbers come from the mission data itself so they can never drift from catalogue prices.
+  const flagship = missions.find(m => m.id === 'mission-college-setup');
+  const flagshipItems = flagship?.items ?? [];
+  const flagshipTotal = flagshipItems.reduce((sum, i) => sum + i.selectedProduct.finalEstimatedPrice, 0);
+  const flagshipBudget = flagship?.targetBudget ?? 15000;
+  const flagshipRemaining = flagshipBudget - flagshipTotal;
 
   return (
     <div className="py-10 bg-cream-50 min-h-screen">
@@ -48,10 +55,11 @@ export const ShoppingMissionsView: React.FC = () => {
                 "I am going to college and have ₹15,000. Help me buy everything I need."
               </p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs text-chocolate-900 font-medium">
-                <span className="bg-white/80 px-2.5 py-1 rounded-lg border border-pink-200">Wildcraft 32L Backpack (₹1,200)</span>
-                <span className="bg-white/80 px-2.5 py-1 rounded-lg border border-pink-200">Nike Air Max Shoes (₹4,599)</span>
-                <span className="bg-white/80 px-2.5 py-1 rounded-lg border border-pink-200">Sony ANC Headphones (₹7,990)</span>
-                <span className="bg-white/80 px-2.5 py-1 rounded-lg border border-pink-200">Derma Co Sunscreen (₹429)</span>
+                {flagshipItems.map(item => (
+                  <span key={item.id} className="bg-white/80 px-2.5 py-1 rounded-lg border border-pink-200">
+                    {item.name} (₹{item.selectedProduct.finalEstimatedPrice.toLocaleString('en-IN')})
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -59,15 +67,15 @@ export const ShoppingMissionsView: React.FC = () => {
               <div className="text-left space-y-1">
                 <div className="flex justify-between text-xs text-chocolate-600">
                   <span>Target Budget:</span>
-                  <span className="font-bold text-chocolate-950">₹15,000</span>
+                  <span className="font-bold text-chocolate-950">₹{flagshipBudget.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-xs text-chocolate-600">
                   <span>Calculated Total:</span>
-                  <span className="font-bold text-chocolate-950">₹13,700</span>
+                  <span className="font-bold text-chocolate-950">₹{flagshipTotal.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between text-xs text-emerald-700 font-bold">
-                  <span>Remaining Budget:</span>
-                  <span>₹1,300</span>
+                <div className={`flex justify-between text-xs font-bold ${flagshipRemaining >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  <span>{flagshipRemaining >= 0 ? 'Remaining Budget:' : 'Over Budget By:'}</span>
+                  <span>₹{Math.abs(flagshipRemaining).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 

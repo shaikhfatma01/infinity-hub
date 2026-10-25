@@ -1,11 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShoppingBasket, Sparkles, Store, CheckCircle2, TrendingDown, ArrowRight, ShoppingBag } from 'lucide-react';
+import { ShoppingBasket, Sparkles, ShoppingBag } from 'lucide-react';
+import { catalogService, GroceryShowcase } from '../../services/catalogService';
 
 export const GroceryValueEngineView: React.FC = () => {
-  const { products, addToCart, setSelectedProduct } = useApp();
+  const { products, addToCart, setSelectedProduct, isLiveBackend } = useApp();
 
   const groceryProducts = products.filter(p => p.category === 'Grocery');
+
+  // Unit-rate showcases are computed by the backend from catalogue prices.
+  const [showcases, setShowcases] = useState<GroceryShowcase[]>([]);
+  const [notice, setNotice] = useState<string>('');
+
+  useEffect(() => {
+    if (!isLiveBackend) return;
+    let cancelled = false;
+    catalogService.compareGrocery()
+      .then(res => {
+        if (cancelled) return;
+        setShowcases(res.showcases);
+        setNotice(res.notice);
+      })
+      .catch(() => { /* keep whatever is showing */ });
+    return () => { cancelled = true; };
+  }, [isLiveBackend]);
 
   return (
     <div className="py-10 bg-cream-50 min-h-screen">
@@ -34,51 +52,71 @@ export const GroceryValueEngineView: React.FC = () => {
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Item A */}
-            <div className="p-5 rounded-2xl bg-cream-50 border border-pink-200 relative flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-chocolate-500 block">Option A (Standard Pack)</span>
-                <h4 className="font-serif text-base font-bold text-chocolate-950 mt-1">
-                  Premium Basmati Rice (1 kg Pouch)
-                </h4>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="font-serif text-2xl font-bold text-chocolate-900">₹110</span>
-                  <span className="text-xs text-chocolate-500">/ 1 kg</span>
+          {showcases.length === 0 ? (
+            <p className="text-sm text-chocolate-600 text-center py-6">
+              Connect to the InfinityHub server to see live unit-rate comparisons.
+            </p>
+          ) : (
+            <div className="space-y-8">
+              {showcases.map(showcase => (
+                <div key={showcase.title}>
+                  <h4 className="font-serif text-sm font-bold text-chocolate-800 mb-3">{showcase.title}</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {/* Standard pack */}
+                    <div className="p-5 rounded-2xl bg-cream-50 border border-pink-200 relative flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-chocolate-500 block">Option A (Standard Pack · {showcase.standardPack.store})</span>
+                        <h4 className="font-serif text-base font-bold text-chocolate-950 mt-1">
+                          {showcase.standardPack.name}
+                        </h4>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="font-serif text-2xl font-bold text-chocolate-900">₹{showcase.standardPack.price.toLocaleString('en-IN')}</span>
+                          <span className="text-xs text-chocolate-500">/ {showcase.standardPack.packSize}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-pink-100 flex items-center justify-between text-xs font-bold text-chocolate-700">
+                        <span>Calculated Rate:</span>
+                        <span className="text-chocolate-900">{showcase.standardPack.unitRate}</span>
+                      </div>
+                    </div>
+
+                    {/* Value pack */}
+                    <div className={`p-5 rounded-2xl relative flex flex-col justify-between ${
+                      showcase.valuePack.isBestValue
+                        ? 'bg-gradient-to-br from-emerald-50 via-white to-cream-50 border-2 border-emerald-400 shadow-soft'
+                        : 'bg-cream-50 border border-pink-200'
+                    }`}>
+                      {showcase.valuePack.isBestValue && (
+                        <div className="absolute top-3 right-3 bg-emerald-700 text-white text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full shadow-xs">
+                          🏆 BEST VALUE PACK
+                        </div>
+                      )}
+
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-emerald-800 block">Option B ({showcase.valuePack.packSize} · {showcase.valuePack.store})</span>
+                        <h4 className="font-serif text-base font-bold text-chocolate-950 mt-1 pr-24">
+                          {showcase.valuePack.name}
+                        </h4>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="font-serif text-2xl font-bold text-chocolate-900">₹{showcase.valuePack.price.toLocaleString('en-IN')}</span>
+                          <span className="text-xs text-chocolate-500">/ {showcase.valuePack.packSize}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
+                        <span>Calculated Rate:</span>
+                        <span className="text-emerald-700 font-serif text-base">{showcase.valuePack.unitRate} ({showcase.valuePack.savingsPerUnit})</span>
+                      </div>
+                    </div>
+
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-pink-100 flex items-center justify-between text-xs font-bold text-chocolate-700">
-                <span>Calculated Rate:</span>
-                <span className="text-chocolate-900">₹110 / kg</span>
-              </div>
+              ))}
+              {notice && <p className="text-[11px] text-chocolate-500 italic">{notice}</p>}
             </div>
-
-            {/* Item B (Winner) */}
-            <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-cream-50 border-2 border-emerald-400 shadow-soft relative flex flex-col justify-between">
-              <div className="absolute top-3 right-3 bg-emerald-700 text-white text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full shadow-xs">
-                🏆 BEST VALUE PACK
-              </div>
-
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-800 block">Option B (Bulk 5kg Value Sack)</span>
-                <h4 className="font-serif text-base font-bold text-chocolate-950 mt-1">
-                  Daawat Rozana Gold Aged Basmati Rice (5 kg)
-                </h4>
-                <div className="flex items-baseline gap-2 mt-2">
-                  <span className="font-serif text-2xl font-bold text-chocolate-900">₹425</span>
-                  <span className="text-xs text-chocolate-500">/ 5 kg sack</span>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-emerald-200 flex items-center justify-between text-xs font-bold text-emerald-900">
-                <span>Calculated Rate:</span>
-                <span className="text-emerald-700 font-serif text-base">₹85 / kg (Save ₹25/kg!)</span>
-              </div>
-            </div>
-
-          </div>
+          )}
         </div>
 
         {/* Grocery Catalog Items */}

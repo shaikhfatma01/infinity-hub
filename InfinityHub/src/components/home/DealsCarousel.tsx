@@ -14,11 +14,13 @@ export const DealsCarousel: React.FC = () => {
     { id: 'under5000', label: '💎 Under ₹5,000' },
   ];
 
-  const filteredDeals = products.filter(product => {
+  const verifiedDeals = products.filter(product => product.dealStatus === 'REAL DEAL');
+
+  const filteredDeals = verifiedDeals.filter(product => {
     if (activeDealFilter === 'under1000') return product.currentPrice <= 1000;
     if (activeDealFilter === 'under5000') return product.currentPrice <= 5000;
     if (activeDealFilter === 'biggest-discount') return product.discountPercent >= 40;
-    return product.dealStatus === 'REAL DEAL';
+    return true;
   });
 
   return (
@@ -71,7 +73,7 @@ export const DealsCarousel: React.FC = () => {
             onClick={() => setActiveTab('deals')}
             className="inline-flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-white hover:bg-pink-100 text-chocolate-900 border border-pink-300 font-bold text-xs sm:text-sm shadow-soft transition-all cursor-pointer"
           >
-            <span>Explore All 15+ Verified Deals</span>
+            <span>Explore All {verifiedDeals.length} Verified Deals</span>
             <ArrowRight className="w-4 h-4 text-pink-600" />
           </button>
         </div>

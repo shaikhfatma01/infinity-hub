@@ -23,6 +23,16 @@ export interface StoreProviderAdapter extends StoreProviderMetadata {
   getOfferByGroupId: (productGroupId: string) => Promise<StoreOffer | null>;
 }
 
+/**
+ * An env var counts as a credential only when it holds a real value. Blank values and obvious
+ * template placeholders ("placeholder", "changeme", "your-key-here") must not flip a store to "live".
+ */
+export function hasCredential(name: string): boolean {
+  const value = (process.env[name] || '').trim();
+  if (!value) return false;
+  return !/^(placeholder|changeme|change-me|your[-_ ]|replace[-_ ]|xxx|todo)/i.test(value);
+}
+
 export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> = {
   Amazon: {
     storeName: 'Amazon',
@@ -30,8 +40,8 @@ export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> 
     categorySpecialty: ['Electronics', 'Laptops', 'Books', 'Home', 'Fashion'],
     integrationType: 'Product Advertising API',
     authType: 'API Key & Secret',
-    isConfigured: Boolean(process.env.AMAZON_PAAPI_KEY && process.env.AMAZON_AFFILIATE_TAG),
-    status: (process.env.AMAZON_PAAPI_KEY && process.env.AMAZON_AFFILIATE_TAG) ? 'active' : 'demo_mode',
+    isConfigured: hasCredential('AMAZON_PAAPI_KEY') && hasCredential('AMAZON_AFFILIATE_TAG'),
+    status: (hasCredential('AMAZON_PAAPI_KEY') && hasCredential('AMAZON_AFFILIATE_TAG')) ? 'active' : 'demo_mode',
     documentation: {
       description: 'Amazon Product Advertising API (PA-API v5.0) provides programmatic search, item lookup, and price tracking.',
       requiredCredentials: ['AMAZON_PAAPI_KEY', 'AMAZON_PAAPI_SECRET', 'AMAZON_AFFILIATE_TAG'],
@@ -47,8 +57,8 @@ export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> 
     categorySpecialty: ['Electronics', 'Appliances', 'Mobiles', 'Bedding & Blankets', 'Fashion'],
     integrationType: 'Affiliate Feed API',
     authType: 'Affiliate Tracking ID',
-    isConfigured: Boolean(process.env.FLIPKART_AFFILIATE_ID && process.env.FLIPKART_AFFILIATE_TOKEN),
-    status: (process.env.FLIPKART_AFFILIATE_ID && process.env.FLIPKART_AFFILIATE_TOKEN) ? 'active' : 'demo_mode',
+    isConfigured: hasCredential('FLIPKART_AFFILIATE_ID') && hasCredential('FLIPKART_AFFILIATE_TOKEN'),
+    status: (hasCredential('FLIPKART_AFFILIATE_ID') && hasCredential('FLIPKART_AFFILIATE_TOKEN')) ? 'active' : 'demo_mode',
     documentation: {
       description: 'Flipkart Affiliate API provides delta product feeds, category listings, and price points.',
       requiredCredentials: ['FLIPKART_AFFILIATE_ID', 'FLIPKART_AFFILIATE_TOKEN'],
@@ -64,8 +74,8 @@ export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> 
     categorySpecialty: ['Fashion', 'Footwear', 'Bags & Purses', 'Beauty & Lifestyle'],
     integrationType: 'Affiliate Feed API',
     authType: 'Partner Token',
-    isConfigured: Boolean(process.env.MYNTRA_PARTNER_API_KEY),
-    status: Boolean(process.env.MYNTRA_PARTNER_API_KEY) ? 'active' : 'demo_mode',
+    isConfigured: hasCredential('MYNTRA_PARTNER_API_KEY'),
+    status: hasCredential('MYNTRA_PARTNER_API_KEY') ? 'active' : 'demo_mode',
     documentation: {
       description: 'Myntra Partner Network feed distribution for catalog discovery and promotional campaigns.',
       requiredCredentials: ['MYNTRA_PARTNER_API_KEY', 'MYNTRA_AFFILIATE_ID'],
@@ -81,8 +91,8 @@ export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> 
     categorySpecialty: ['Skincare & Beauty', 'Cosmetics', 'Fragrance', 'Haircare'],
     integrationType: 'Affiliate Feed API',
     authType: 'Partner Token',
-    isConfigured: Boolean(process.env.NYKAA_API_KEY),
-    status: Boolean(process.env.NYKAA_API_KEY) ? 'active' : 'demo_mode',
+    isConfigured: hasCredential('NYKAA_API_KEY'),
+    status: hasCredential('NYKAA_API_KEY') ? 'active' : 'demo_mode',
     documentation: {
       description: 'Nykaa Affiliate Partner feed offering authentic beauty product catalogs and stock status.',
       requiredCredentials: ['NYKAA_API_KEY', 'NYKAA_AFFILIATE_ID'],
@@ -149,8 +159,8 @@ export const STORE_PROVIDERS_METADATA: Record<StoreName, StoreProviderMetadata> 
     categorySpecialty: ['Laptops', 'Audio & Headphones', 'Smartphones', 'Appliances'],
     integrationType: 'Merchant Feed API',
     authType: 'API Key & Secret',
-    isConfigured: Boolean(process.env.CROMA_API_KEY),
-    status: Boolean(process.env.CROMA_API_KEY) ? 'active' : 'demo_mode',
+    isConfigured: hasCredential('CROMA_API_KEY'),
+    status: hasCredential('CROMA_API_KEY') ? 'active' : 'demo_mode',
     documentation: {
       description: 'Croma (Tata Group) electronics inventory feed for omnichannel pricing and store pickup.',
       requiredCredentials: ['CROMA_API_KEY'],

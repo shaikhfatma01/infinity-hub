@@ -20,12 +20,15 @@ export const SnapAndShopModal: React.FC = () => {
     isSnapShopModalOpen, 
     setIsSnapShopModalOpen, 
     setSelectedProduct, 
-    addToCart 
+    addToCart,
+    showToast
   } = useApp();
 
   const [selectedPreset, setSelectedPreset] = useState<string>('handbag');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<VisualMatchResult[]>(simulateVisualSearch('purse'));
+  // Hooks must run on every render, so this lives above the early return below.
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isSnapShopModalOpen) return null;
 
@@ -56,47 +59,37 @@ export const SnapAndShopModal: React.FC = () => {
     }
   ];
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const handleSelectPreset = async (preset: typeof presets[0]) => {
     setSelectedPreset(preset.id);
     setIsAnalyzing(true);
     try {
-      const backendRes = await catalogService.searchByVisualPreset(preset.query);
-      if (backendRes && backendRes.success && backendRes.data?.matches) {
-        setResults(backendRes.data.matches);
-        setIsAnalyzing(false);
-        return;
-      }
+      const matches = await catalogService.searchByVisualPreset(preset.query);
+      setResults(matches);
     } catch {
-      // Local fallback
-    }
-    setTimeout(() => {
+      // Server unreachable: use the on-device demo matcher.
       setResults(simulateVisualSearch(preset.query));
+    } finally {
       setIsAnalyzing(false);
-    }, 400);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
 
     setSelectedPreset('custom-upload');
     setIsAnalyzing(true);
     try {
-      const uploadRes = await catalogService.uploadVisualSearch(file);
-      if (uploadRes && uploadRes.success && uploadRes.data?.matches) {
-        setResults(uploadRes.data.matches);
-        setIsAnalyzing(false);
-        return;
-      }
-    } catch {
-      // Fallback
-    }
-    setTimeout(() => {
-      setResults(simulateVisualSearch('bag'));
+      const matches = await catalogService.uploadVisualSearch(file);
+      setResults(matches);
+    } catch (err) {
+      showToast('Image search issue', err instanceof Error ? err.message : 'Could not analyse that image.', 'warning');
+      setResults(simulateVisualSearch(file.name));
+    } finally {
       setIsAnalyzing(false);
-    }, 500);
+      input.value = ''; // allow re-uploading the same file
+    }
   };
 
   return (

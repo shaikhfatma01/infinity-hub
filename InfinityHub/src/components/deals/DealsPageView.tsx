@@ -7,7 +7,10 @@ export const DealsPageView: React.FC = () => {
   const { products, setActiveTab } = useApp();
   const [selectedSection, setSelectedSection] = useState<'all' | 'under1000' | 'under5000' | 'biggest' | 'buynow'>('all');
 
-  const filteredDeals = products.filter(product => {
+  // This page promises verified deals, so products flagged "FAIR PRICE" never appear here.
+  const verifiedDeals = products.filter(product => product.dealStatus === 'REAL DEAL');
+
+  const filteredDeals = verifiedDeals.filter(product => {
     if (selectedSection === 'under1000') return product.currentPrice <= 1000;
     if (selectedSection === 'under5000') return product.currentPrice <= 5000;
     if (selectedSection === 'biggest') return product.discountPercent >= 40;
@@ -55,6 +58,10 @@ export const DealsPageView: React.FC = () => {
             </button>
           ))}
         </div>
+
+        {filteredDeals.length === 0 && (
+          <p className="text-center text-sm text-chocolate-600 py-10">No verified deals match this filter right now.</p>
+        )}
 
         {/* Deals Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

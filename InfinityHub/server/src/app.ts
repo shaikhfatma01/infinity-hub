@@ -32,6 +32,7 @@ app.use(
   cors({
     origin: [config.clientUrl, 'http://localhost:3000', 'http://127.0.0.1:3000'],
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-guest-id'],
   })
 );
 
@@ -57,10 +58,10 @@ app.use('/api/shared-lists', sharedListRoutes);
 app.use('/api/providers', providerRoutes);
 
 // Catch-all 404 handler for API routes
-app.use('/api/*', (req, res) => {
+app.use('/api', (req, res) => {
   res.status(404).json({
     success: false,
-    error: `API route "${req.method} ${req.baseUrl}" not found.`,
+    error: `API route "${req.method} ${req.originalUrl.split('?')[0]}" not found.`,
   });
 });
 

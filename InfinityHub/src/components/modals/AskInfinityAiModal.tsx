@@ -90,67 +90,64 @@ export const AskInfinityAiModal: React.FC = () => {
     setInputMessage('');
     setIsTyping(true);
 
+    // Prior turns give the server context for follow-up questions (it keeps the last few).
+    const history = messages
+      .filter(m => m.id !== 'msg-welcome')
+      .map(m => ({ role: m.sender, text: m.text }));
+
     try {
-      const response = await catalogService.sendAiChat(query);
-      if (response && response.success && response.data) {
-        const { text, recommendedProducts, actionSuggestion } = response.data;
-        const aiMsg: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          sender: 'ai',
-          text,
-          recommendedProducts: recommendedProducts && recommendedProducts.length > 0 ? recommendedProducts : undefined,
-          actionSuggestion
-        };
-        setMessages(prev => [...prev, aiMsg]);
-        setIsTyping(false);
-        return;
-      }
+      const reply = await catalogService.sendAiChat(query, history);
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        text: reply.text,
+        recommendedProducts: reply.recommendedProducts && reply.recommendedProducts.length > 0 ? reply.recommendedProducts : undefined,
+        actionSuggestion: reply.actionSuggestion
+      };
+      setMessages(prev => [...prev, aiMsg]);
+      setIsTyping(false);
+      return;
     } catch {
-      // Gracefully fall back to local grounded reasoning
+      // Server unreachable: answer from the products already loaded in the browser.
     }
 
-    // AI logic simulation / offline fallback
-    setTimeout(() => {
-      const lower = query.toLowerCase();
-      let replyText = '';
-      let matchedProds: Product[] = [];
-      let suggestion: ChatMessage['actionSuggestion'] = undefined;
+    const parsed = parseNaturalLanguageQuery(query);
+    const lower = query.toLowerCase();
+    let suggestion: ChatMessage['actionSuggestion'] = undefined;
+    let matchedProds = products
+      .filter(p => !parsed.category || p.category === parsed.category)
+      .filter(p => !parsed.maxBudget || p.currentPrice <= parsed.maxBudget)
+      .filter(p => !parsed.minRating || p.rating >= parsed.minRating)
+      .sort((a, b) => b.infinityScore - a.infinityScore)
+      .slice(0, 3);
+    let replyText = '';
 
-      if (lower.includes('purse') || lower.includes('bag')) {
-        matchedProds = products.filter(p => p.category === 'Bags & Purses');
-        replyText = `I analyzed offers across Myntra, Amazon, and Flipkart. I found the **Lavie Luxe Black Vegan Satchel** on Myntra for ₹899 (64% discount), beating Amazon by ₹140 on final estimated cost.`;
-      } else if (lower.includes('laptop') || lower.includes('coding') || lower.includes('programming')) {
-        matchedProds = products.filter(p => p.category === 'Laptops');
-        replyText = `For software development and college coding, I recommend the **ASUS Vivobook 15 OLED (16GB RAM / Core i5)**. Croma currently lists it for ₹54,990 with 1-day delivery and includes 1 extra year of accidental protection.`;
-      } else if (lower.includes('cart') || lower.includes('optimize') || lower.includes('save')) {
-        replyText = `I scanned your active Infinity Cart. By switching items to their verified Product Twin™ Best Deals across Myntra and Nykaa, you can save ~₹1,100 on your overall basket!`;
-        suggestion = {
-          label: '🛒 Open & Optimize Cart Now',
-          actionType: 'open-cart'
-        };
-      } else if (lower.includes('college') || lower.includes('mission')) {
-        matchedProds = products.slice(0, 3);
-        replyText = `I built a customized **College Setup Mission** under ₹15,000 including a 32L Wildcraft laptop backpack, Sony ANC headphones, Nike sneakers, and daily skincare.`;
-        suggestion = {
-          label: '🎓 View Full College Mission (₹15,000)',
-          actionType: 'open-missions'
-        };
-      } else {
-        matchedProds = products.slice(0, 2);
-        replyText = `I searched across 16 monitored retailers for "${query}". Here are the top verified options based on highest Infinity Score and lowest final cost.`;
-      }
+    if (lower.includes('cart') || lower.includes('optimize') || lower.includes('save money')) {
+      matchedProds = [];
+      replyText = 'The Smart Cart Optimizer™ compares every item in your Infinity Cart against its cross-store Product Twins and suggests 1-click switches. Open your cart to run it.';
+      suggestion = { label: '🛒 Open & Optimize Cart Now', actionType: 'open-cart' };
+    } else if (lower.includes('college') || lower.includes('mission')) {
+      matchedProds = [];
+      replyText = 'I can assemble goal-based baskets for you — open the Shopping Missions hub to explore them.';
+      suggestion = { label: '🎓 View Shopping Missions', actionType: 'open-missions' };
+    } else if (matchedProds.length > 0) {
+      const best = matchedProds[0];
+      replyText = `(Offline mode) Top match from the loaded catalogue: **${best.name}** on ${best.store} for ₹${best.finalEstimatedPrice.toLocaleString('en-IN')}.`;
+    } else {
+      replyText = `(Offline mode) I couldn't find products matching "${query}" in the loaded catalogue.`;
+    }
 
-      const aiMsg: ChatMessage = {
+    setMessages(prev => [
+      ...prev,
+      {
         id: `ai-${Date.now()}`,
         sender: 'ai',
         text: replyText,
         recommendedProducts: matchedProds.length > 0 ? matchedProds : undefined,
         actionSuggestion: suggestion
-      };
-
-      setMessages(prev => [...prev, aiMsg]);
-      setIsTyping(false);
-    }, 600);
+      }
+    ]);
+    setIsTyping(false);
   };
 
   return (

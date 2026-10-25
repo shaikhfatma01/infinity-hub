@@ -27,6 +27,8 @@ export const UserProfileModal: React.FC = () => {
     missions,
     startMission,
     wishlist,
+    cartPotentialSavings,
+    isLiveBackend,
     currentUser,
     login,
     register,
@@ -35,9 +37,9 @@ export const UserProfileModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'profile' | 'alerts' | 'auth'>('profile');
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [emailInput, setEmailInput] = useState('fatma.shaikh@infinityhub.ai');
-  const [passwordInput, setPasswordInput] = useState('Password123!');
-  const [nameInput, setNameInput] = useState('Fatma Shaikh');
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
   if (!isProfileModalOpen) return null;
@@ -45,18 +47,18 @@ export const UserProfileModal: React.FC = () => {
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
-    if (authMode === 'login') {
-      const ok = await login(emailInput, passwordInput);
+    try {
+      const ok =
+        authMode === 'login'
+          ? await login(emailInput, passwordInput)
+          : await register(emailInput, passwordInput, nameInput);
       if (ok) {
         setActiveTab('profile');
+        setPasswordInput('');
       }
-    } else {
-      const ok = await register(emailInput, passwordInput, nameInput);
-      if (ok) {
-        setActiveTab('profile');
-      }
+    } finally {
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
   };
 
   const handleFillDemo = () => {
@@ -152,23 +154,30 @@ export const UserProfileModal: React.FC = () => {
               <div className="bg-gradient-to-r from-pink-100 to-cream-100 p-6 rounded-3xl border border-pink-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full bg-chocolate-900 text-cream-50 flex items-center justify-center font-serif text-2xl font-bold shadow-md">
-                    {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'F'}
+                    {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'G'}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-serif text-xl font-bold text-chocolate-950">
-                        {currentUser?.name || 'Fatma Shaikh'}
+                        {currentUser?.name || 'Guest Shopper'}
                       </h3>
                       <span className="bg-chocolate-900 text-cream-50 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                        {currentUser?.role || 'PRO MEMBER'}
+                        {currentUser ? currentUser.role.replace('_', ' ') : 'GUEST'}
                       </span>
                     </div>
                     <p className="text-xs text-chocolate-700">
-                      {currentUser?.email || 'fatma.shaikh@infinityhub.ai'}
+                      {currentUser?.email || 'Sign in to keep your cart, wishlist and alerts across devices.'}
                     </p>
-                    <p className="text-[11px] text-emerald-700 font-semibold mt-1">
-                      🎉 Estimated Lifetime Savings: ₹14,850 across 12 orders
-                    </p>
+                    {cartPotentialSavings > 0 && (
+                      <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                        🎉 You could save ₹{cartPotentialSavings.toLocaleString('en-IN')} by optimizing your current cart
+                      </p>
+                    )}
+                    {!isLiveBackend && (
+                      <p className="text-[11px] text-amber-700 font-semibold mt-1">
+                        Offline demo mode — changes are not saved to the server.
+                      </p>
+                    )}
                   </div>
                 </div>
 

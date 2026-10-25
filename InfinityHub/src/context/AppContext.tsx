@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Product, 
   StoreName, 
@@ -13,9 +13,11 @@ import {
 } from '../types';
 import { MOCK_PRODUCTS } from '../data/mockProducts';
 import { MOCK_SHOPPING_MISSIONS } from '../data/mockMissions';
+import { getMockProduct } from '../data/mockLookup';
 import { optimizeCart, CartOptimizationReport, parseNaturalLanguageQuery } from '../services/aiEngine';
 import { catalogService } from '../services/catalogService';
 import { authService } from '../services/authService';
+import { AUTH_EXPIRED_EVENT } from '../services/apiClient';
 import confetti from 'canvas-confetti';
 
 export interface ToastMessage {
@@ -43,6 +45,8 @@ interface AppContextType {
   isSearching: boolean;
   refreshCatalog: () => Promise<void>;
   isLiveBackend: boolean;
+  /** Upper bound for the price slider: covers the most expensive product in the catalogue. */
+  maxCatalogPrice: number;
   
   // Auth & Profile
   currentUser: User | null;
@@ -87,8 +91,8 @@ interface AppContextType {
   cartStoreCount: number;
   cartTotal: number;
   cartPotentialSavings: number;
-  runCartOptimizer: () => CartOptimizationReport;
-  applyCartOptimizations: (report: CartOptimizationReport) => void;
+  runCartOptimizer: () => Promise<CartOptimizationReport>;
+  applyCartOptimizations: (report: CartOptimizationReport) => Promise<void>;
   
   // Wishlist
   wishlist: Product[];
@@ -124,11 +128,13 @@ interface AppContextType {
   removeToast: (id: string) => void;
 }
 
+const DEFAULT_MAX_PRICE = 80000;
+
 const initialFilters: FilterState = {
   searchQuery: '',
   selectedStores: [],
   selectedCategories: [],
-  priceRange: [0, 80000],
+  priceRange: [0, DEFAULT_MAX_PRICE],
   minRating: 0,
   minDiscount: 0,
   onlyInStock: false,
@@ -136,25 +142,60 @@ const initialFilters: FilterState = {
   sortBy: 'best-match'
 };
 
+const OFFLINE_DEMO_USER: User = {
+  id: 'user-demo-fatma',
+  email: 'fatma.shaikh@infinityhub.ai',
+  name: 'Fatma Shaikh',
+  role: 'PRO_MEMBER',
+  isDemo: true,
+  createdAt: new Date().toISOString()
+};
+
+/** Starter data shown only when the backend cannot be reached (frontend-only demo mode). */
+function buildOfflineDemoData() {
+  return {
+    cart: [
+      { id: 'cart-demo-1', productId: 'prod-purse-amazon', product: getMockProduct('prod-purse-amazon'), selectedStore: 'Amazon' as StoreName, selectedPrice: 999, selectedShipping: 40, quantity: 1 },
+      { id: 'cart-demo-2', productId: 'prod-skincare-nykaa', product: getMockProduct('prod-skincare-nykaa'), selectedStore: 'Nykaa' as StoreName, selectedPrice: 429, selectedShipping: 0, quantity: 1 },
+      { id: 'cart-demo-3', productId: 'prod-shoes-myntra', product: getMockProduct('prod-shoes-myntra'), selectedStore: 'Myntra' as StoreName, selectedPrice: 4599, selectedShipping: 0, quantity: 1 }
+    ] as CartItem[],
+    wishlist: [getMockProduct('prod-purse-myntra'), getMockProduct('prod-laptop-croma')],
+    alerts: [
+      {
+        id: 'alert-demo-1',
+        productId: 'prod-laptop-croma',
+        productName: getMockProduct('prod-laptop-croma').name,
+        productImage: getMockProduct('prod-laptop-croma').image,
+        currentPrice: getMockProduct('prod-laptop-croma').currentPrice,
+        targetPrice: 52000,
+        store: 'Croma' as StoreName,
+        createdAt: 'Yesterday',
+        status: 'ACTIVE' as const
+      }
+    ] as PriceAlert[],
+    shared: [
+      { id: 'shared-demo-1', name: 'Daawat Basmati Rice (5kg)', addedBy: 'Fatma', category: 'Grocery', matchedProduct: getMockProduct('prod-rice-bigbasket'), quantity: 1, isPurchased: false },
+      { id: 'shared-demo-2', name: 'Fortune Sunflower Oil (1L)', addedBy: 'Amina', category: 'Grocery', matchedProduct: getMockProduct('prod-oil-blinkit'), quantity: 2, isPurchased: false },
+      { id: 'shared-demo-3', name: 'Wakefit Winter Double Blanket', addedBy: 'Mom', category: 'Bedding', matchedProduct: getMockProduct('prod-blanket-flipkart'), quantity: 1, isPurchased: true }
+    ] as SharedListItem[]
+  };
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeTab, setActiveTab] = useState<string>('home');
+  // The bundled demo catalogue is shown instantly and replaced by the database catalogue once loaded.
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isLiveBackend, setIsLiveBackend] = useState<boolean>(false);
+  // Mirrors isLiveBackend for use inside async callbacks without stale closures.
+  const liveRef = useRef<boolean>(false);
 
-  // Auth state
-  const [currentUser, setCurrentUser] = useState<User | null>({
-    id: 'user-demo-fatma',
-    email: 'fatma.shaikh@infinityhub.ai',
-    name: 'Fatma Shaikh',
-    role: 'PRO_MEMBER',
-    isDemo: true,
-    createdAt: new Date().toISOString()
-  });
+  // Auth state: a visitor is a guest (null) until they sign in; the demo user only exists offline.
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Modals
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -171,205 +212,179 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
   const [priceAlertTargetProduct, setPriceAlertTargetProduct] = useState<Product | null>(null);
 
-  // Cart
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: 'cart-init-1',
-      productId: 'prod-purse-amazon',
-      product: MOCK_PRODUCTS[1],
-      selectedStore: 'Amazon',
-      selectedPrice: 999,
-      selectedShipping: 40,
-      quantity: 1
-    },
-    {
-      id: 'cart-init-2',
-      productId: 'prod-skincare-nykaa',
-      product: MOCK_PRODUCTS[4],
-      selectedStore: 'Nykaa',
-      selectedPrice: 429,
-      selectedShipping: 0,
-      quantity: 1
-    },
-    {
-      id: 'cart-init-3',
-      productId: 'prod-shoes-myntra',
-      product: MOCK_PRODUCTS[3],
-      selectedStore: 'Myntra',
-      selectedPrice: 4599,
-      selectedShipping: 0,
-      quantity: 1
-    }
-  ]);
-
-  // Wishlist
-  const [wishlist, setWishlist] = useState<Product[]>([
-    MOCK_PRODUCTS[0],
-    MOCK_PRODUCTS[2]
-  ]);
-
-  // Compare List
- const [compareList, setCompareList] = useState<Product[]>([]);
-
-  // Shopping Missions
+  // Per-user data: starts empty and is filled from the server (or the offline demo set).
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [wishlist, setWishlist] = useState<Product[]>([]);
+  const [compareList, setCompareList] = useState<Product[]>([]);
   const [missions, setMissions] = useState<ShoppingMission[]>(MOCK_SHOPPING_MISSIONS);
-  const [activeMission, setActiveMission] = useState<ShoppingMission | null>(MOCK_SHOPPING_MISSIONS[0]);
-
-  // Price Alerts
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([
-    {
-      id: 'alert-1',
-      productId: 'prod-laptop-croma',
-      productName: 'ASUS Vivobook 15 OLED (16GB RAM)',
-      productImage: MOCK_PRODUCTS[1]?.image || '',
-      currentPrice: 54990,
-      targetPrice: 52000,
-      store: 'Croma',
-      createdAt: 'Yesterday',
-      status: 'ACTIVE'
-    }
-  ]);
-
-  // Shared List
-  const [sharedList, setSharedList] = useState<SharedListItem[]>([
-    { id: 'shared-1', name: 'Daawat Basmati Rice (5kg)', addedBy: 'Fatma', category: 'Grocery', matchedProduct: MOCK_PRODUCTS[5], quantity: 1, isPurchased: false },
-    { id: 'shared-2', name: 'Fortune Sunflower Oil (1L)', addedBy: 'Amina', category: 'Grocery', matchedProduct: MOCK_PRODUCTS[6], quantity: 2, isPurchased: false },
-    { id: 'shared-3', name: 'Wakefit Winter Double Blanket', addedBy: 'Mom', category: 'Bedding', matchedProduct: MOCK_PRODUCTS[4], quantity: 1, isPurchased: true }
-  ]);
+  const [activeMission, setActiveMission] = useState<ShoppingMission | null>(MOCK_SHOPPING_MISSIONS[0] ?? null);
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
+  const [sharedList, setSharedList] = useState<SharedListItem[]>([]);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const showToast = (title: string, message: string, type: 'success' | 'info' | 'warning' = 'info') => {
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((title: string, message: string, type: 'success' | 'info' | 'warning' = 'info') => {
     const id = Date.now().toString() + Math.random().toString();
     setToasts(prev => [...prev, { id, title, message, type }]);
     setTimeout(() => {
       removeToast(id);
     }, 4500);
-  };
+  }, [removeToast]);
 
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  const errorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error && err.message ? err.message : fallback;
 
-  // Sync with Backend on initialization
-  const refreshCatalog = async () => {
+  // ── Server → UI synchronisation ───────────────────────────────────────────
+  const syncCart = useCallback(async () => {
     try {
-      const data = await catalogService.getProducts();
-      if (data && data.products && data.products.length > 0) {
-        setProducts(data.products);
-        setIsLiveBackend(true);
-      }
+      const { items } = await catalogService.getCart();
+      setCartItems(items);
+    } catch { /* keep the optimistic state if the refresh itself fails */ }
+  }, []);
+
+  const syncWishlist = useCallback(async () => {
+    try {
+      setWishlist(await catalogService.getWishlist());
+    } catch { /* ignore */ }
+  }, []);
+
+  const syncAlerts = useCallback(async () => {
+    try {
+      setPriceAlerts(await catalogService.getPriceAlerts());
+    } catch { /* ignore */ }
+  }, []);
+
+  const syncSharedList = useCallback(async () => {
+    try {
+      const { items } = await catalogService.getSharedList();
+      setSharedList(items);
+    } catch { /* ignore */ }
+  }, []);
+
+  /** Reloads everything that belongs to the current identity (guest or signed-in user). */
+  const loadUserData = useCallback(async () => {
+    await Promise.allSettled([syncCart(), syncWishlist(), syncAlerts(), syncSharedList()]);
+  }, [syncCart, syncWishlist, syncAlerts, syncSharedList]);
+
+  const applyOfflineDemoData = useCallback(() => {
+    const demo = buildOfflineDemoData();
+    setCartItems(demo.cart);
+    setWishlist(demo.wishlist);
+    setPriceAlerts(demo.alerts);
+    setSharedList(demo.shared);
+    setMissions(MOCK_SHOPPING_MISSIONS);
+    setActiveMission(MOCK_SHOPPING_MISSIONS[0] ?? null);
+  }, []);
+
+  const loadCatalog = useCallback(async (): Promise<boolean> => {
+    try {
+      const all = await catalogService.getAllProducts();
+      setProducts(all);
+      liveRef.current = true;
+      setIsLiveBackend(true);
+      return true;
     } catch {
-      // Backend not running yet or unreachable, gracefully retain mock catalog
+      liveRef.current = false;
+      setIsLiveBackend(false);
+      return false;
     }
+  }, []);
+
+  const refreshCatalog = async () => {
+    await loadCatalog();
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const initAppData = async () => {
-      // 1. Check if user is logged in
+      // 1. Restore the session first so every later request is made as the right identity.
       if (authService.isAuthenticated()) {
         try {
           const authData = await authService.getMe();
-          if (authData?.user) {
+          if (!cancelled && authData?.user) {
             setCurrentUser(authData.user);
           }
         } catch {
-          // Token expired or invalid
-          authService.logout();
+          // Expired/invalid token (apiClient already cleared it) or server unreachable.
+          if (!cancelled) setCurrentUser(null);
         }
       }
 
-      // 2. Load live products from backend
-      try {
-        const prodData = await catalogService.getProducts();
-        if (prodData && prodData.products && prodData.products.length > 0) {
-          setProducts(prodData.products);
-          setIsLiveBackend(true);
-        }
-      } catch {
-        // Fallback to MOCK_PRODUCTS
+      // 2. Catalogue decides whether we are live or in offline demo mode.
+      const live = await loadCatalog();
+      if (cancelled) return;
+
+      if (!live) {
+        setCurrentUser(prev => prev ?? OFFLINE_DEMO_USER);
+        applyOfflineDemoData();
+        return;
       }
 
-      // 3. Load live cart from backend
+      // 3. Live: everything below comes from the database, including genuinely empty states.
       try {
-        const cartData = await catalogService.getCart();
-        if (cartData && cartData.items && cartData.items.length > 0) {
-          setCartItems(cartData.items);
+        const liveMissions = await catalogService.getMissions();
+        if (!cancelled) {
+          setMissions(liveMissions);
+          setActiveMission(liveMissions[0] ?? null);
         }
-      } catch {
-        // Fallback to initial cart items
-      }
+      } catch { /* keep bundled missions */ }
 
-      // 4. Load live wishlist
-      try {
-        const wishData = await catalogService.getWishlist();
-        if (wishData && wishData.wishlist) {
-          const mappedWish = wishData.wishlist.map(w => w.product).filter(Boolean);
-          if (mappedWish.length > 0) {
-            setWishlist(mappedWish);
-          }
-        }
-      } catch {
-        // Keep initial wishlist
-      }
-
-      // 5. Load live alerts
-      try {
-        const alertData = await catalogService.getPriceAlerts();
-        if (alertData && alertData.alerts && alertData.alerts.length > 0) {
-          setPriceAlerts(alertData.alerts);
-        }
-      } catch {
-        // Keep initial alerts
-      }
-
-      // 6. Load live shopping missions
-      try {
-        const missionData = await catalogService.getMissions();
-        if (missionData && missionData.missions && missionData.missions.length > 0) {
-          setMissions(missionData.missions);
-          setActiveMission(missionData.missions[0]);
-        }
-      } catch {
-        // Keep initial missions
-      }
-
-      // 7. Load live shared list
-      try {
-        const listData = await catalogService.getSharedList();
-        if (listData && listData.items && listData.items.length > 0) {
-          setSharedList(listData.items);
-        }
-      } catch {
-        // Keep initial shared items
-      }
+      await loadUserData();
     };
 
     initAppData();
+
+    // If the server rejects our token later on, fall back to guest mode cleanly.
+    const handleAuthExpired = () => {
+      setCurrentUser(null);
+      showToast('Session expired', 'Please sign in again to sync your account.', 'warning');
+      if (liveRef.current) loadUserData();
+    };
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auth actions
+  // Keep the price slider usable if the catalogue contains items above the default ceiling.
+  const maxCatalogPrice = React.useMemo(() => {
+    const top = products.reduce((m, p) => Math.max(m, p.currentPrice || 0), 0);
+    return Math.max(DEFAULT_MAX_PRICE, Math.ceil(top / 10000) * 10000);
+  }, [products]);
+
+  useEffect(() => {
+    setFilters(prev =>
+      prev.priceRange[1] === DEFAULT_MAX_PRICE && maxCatalogPrice > DEFAULT_MAX_PRICE
+        ? { ...prev, priceRange: [prev.priceRange[0], maxCatalogPrice] }
+        : prev
+    );
+  }, [maxCatalogPrice]);
+
+  // ── Auth actions ──────────────────────────────────────────────────────────
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const res = await authService.login({ email, password });
       if (res && res.user) {
         setCurrentUser(res.user);
         showToast('👋 Welcome back!', `Signed in as ${res.user.name}`, 'success');
-        // Refresh cart & wishlist for this user
-        try {
-          const cartData = await catalogService.getCart();
-          if (cartData?.items) setCartItems(cartData.items);
-          const wishData = await catalogService.getWishlist();
-          if (wishData?.wishlist) setWishlist(wishData.wishlist.map(w => w.product).filter(Boolean));
-        } catch {
-          // Ignore sync errors
-        }
+        // The server merged any guest cart/wishlist/alerts into this account; reload them.
+        liveRef.current = true;
+        setIsLiveBackend(true);
+        await loadUserData();
         return true;
       }
       return false;
-    } catch (err: any) {
-      showToast('Authentication Error', err.message || 'Login failed', 'warning');
+    } catch (err) {
+      showToast('Authentication Error', errorMessage(err, 'Login failed'), 'warning');
       return false;
     }
   };
@@ -380,11 +395,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res && res.user) {
         setCurrentUser(res.user);
         showToast('🎉 Account Created', `Welcome to InfinityHub, ${res.user.name}!`, 'success');
+        liveRef.current = true;
+        setIsLiveBackend(true);
+        await loadUserData();
         return true;
       }
       return false;
-    } catch (err: any) {
-      showToast('Registration Error', err.message || 'Sign up failed', 'warning');
+    } catch (err) {
+      showToast('Registration Error', errorMessage(err, 'Sign up failed'), 'warning');
       return false;
     }
   };
@@ -393,6 +411,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     authService.logout();
     setCurrentUser(null);
     showToast('Signed Out', 'You have been logged out of InfinityHub.', 'info');
+    if (liveRef.current) {
+      loadUserData();
+    } else {
+      setCartItems([]);
+      setWishlist([]);
+      setPriceAlerts([]);
+      setSharedList([]);
+    }
   };
 
   // Search Submit with simulated AI scanning
@@ -413,7 +439,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setTimeout(() => {
       setIsSearching(false);
-      showToast('✨ Infinity AI Scan Complete', `Found matching products across 16 monitored stores for "${q || 'All Products'}".`, 'success');
+      showToast('✨ Infinity AI Scan Complete', `Searched 16 monitored stores for "${q || 'All Products'}".`, 'success');
     }, 600);
   };
 
@@ -422,7 +448,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetFilters = () => {
-    setFilters(initialFilters);
+    setFilters({ ...initialFilters, priceRange: [0, maxCatalogPrice] });
     setSearchQuery('');
   };
 
@@ -490,7 +516,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return results;
   }, [products, filters]);
 
-  // Cart operations
+  // ── Cart operations ───────────────────────────────────────────────────────
   const addToCart = (product: Product, store?: StoreName, price?: number, shipping?: number) => {
     const finalStore = store || product.store;
     const finalPrice = price !== undefined ? price : product.currentPrice;
@@ -518,25 +544,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     showToast('🛒 Added to Infinity Cart', `${product.name.slice(0, 32)}... (${finalStore})`, 'success');
 
-    // Async persist to backend
-    catalogService.addToCart({
-      productId: product.id,
-      selectedStore: finalStore,
-      selectedPrice: finalPrice,
-      selectedShipping: finalShipping,
-      quantity: 1
-    }).then(res => {
-      if (res?.item?.id) {
-        setCartItems(prev => prev.map(item => item.id === tempId ? { ...item, id: res.item.id } : item));
-      }
-    }).catch(() => {
-      // Offline fallback retained seamlessly
-    });
+    if (!liveRef.current) return; // offline demo mode: local only
+
+    catalogService.addToCart({ productId: product.id, store: finalStore, quantity: 1 })
+      .then(serverItem => {
+        // Swap the optimistic line for the authoritative one (real id, server-side price & quantity).
+        setCartItems(prev => {
+          const withoutTemp = prev.filter(item => item.id !== tempId);
+          return withoutTemp.some(item => item.id === serverItem.id)
+            ? withoutTemp.map(item => item.id === serverItem.id ? serverItem : item)
+            : [...withoutTemp, serverItem];
+        });
+      })
+      .catch(err => {
+        showToast('Could not add to cart', errorMessage(err, 'Please try again.'), 'warning');
+        syncCart();
+      });
   };
 
   const removeFromCart = (cartItemId: string) => {
     setCartItems(prev => prev.filter(item => item.id !== cartItemId));
-    catalogService.removeCartItem(cartItemId).catch(() => {});
+    if (!liveRef.current) return;
+    catalogService.removeCartItem(cartItemId).catch(err => {
+      showToast('Could not remove item', errorMessage(err, 'Please try again.'), 'warning');
+      syncCart();
+    });
   };
 
   const updateCartQuantity = (cartItemId: string, qty: number) => {
@@ -545,7 +577,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setCartItems(prev => prev.map(item => item.id === cartItemId ? { ...item, quantity: qty } : item));
-    catalogService.updateCartItem(cartItemId, qty).catch(() => {});
+    if (!liveRef.current) return;
+    catalogService.updateCartItem(cartItemId, qty).catch(err => {
+      showToast('Could not update quantity', errorMessage(err, 'Please try again.'), 'warning');
+      syncCart();
+    });
   };
 
   // Cart aggregates
@@ -559,34 +595,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [cartItems]);
 
   const cartPotentialSavings = React.useMemo(() => {
-    const opt = optimizeCart(cartItems);
+    const opt = optimizeCart(cartItems, products);
     return opt.totalSavings;
-  }, [cartItems]);
+  }, [cartItems, products]);
 
-  const runCartOptimizer = () => {
-    return optimizeCart(cartItems);
+  const runCartOptimizer = async (): Promise<CartOptimizationReport> => {
+    if (liveRef.current) {
+      try {
+        // Server-side analysis over the persisted cart (same Product Twin data as the catalogue).
+        return (await catalogService.optimizeCart()) as CartOptimizationReport;
+      } catch (err) {
+        showToast('Using local analysis', errorMessage(err, 'Server optimizer unavailable.'), 'info');
+      }
+    }
+    return optimizeCart(cartItems, products);
   };
 
-  const applyCartOptimizations = (report: CartOptimizationReport) => {
+  const applyCartOptimizations = async (report: CartOptimizationReport): Promise<void> => {
     if (report.optimizations.length === 0) {
       showToast('✨ Cart Already Optimal', 'Your Infinity Cart is already at maximum savings!', 'info');
       return;
     }
 
-    setCartItems(prev => {
-      return prev.map(item => {
-        const opt = report.optimizations.find(o => o.cartItemId === item.id);
-        if (opt) {
-          return {
-            ...item,
-            selectedStore: opt.recommendedStore,
-            selectedPrice: opt.recommendedPrice,
-            selectedShipping: 0
-          };
-        }
-        return item;
-      });
-    });
+    let savedAmount = report.totalSavings;
+
+    if (liveRef.current) {
+      try {
+        const result = await catalogService.applyOptimizations();
+        savedAmount = result.totalSavings;
+        await syncCart();
+      } catch (err) {
+        showToast('Could not apply savings', errorMessage(err, 'Please try again.'), 'warning');
+        await syncCart();
+        return;
+      }
+    } else {
+      setCartItems(prev =>
+        prev.map(item => {
+          const opt = report.optimizations.find(o => o.cartItemId === item.id);
+          return opt
+            ? {
+                ...item,
+                selectedStore: opt.recommendedStore,
+                selectedPrice: opt.recommendedBasePrice,
+                selectedShipping: opt.recommendedShipping
+              }
+            : item;
+        })
+      );
+    }
 
     // Launch confetti!
     confetti({
@@ -596,13 +653,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       colors: ['#F78FB9', '#3D2314', '#D4AF37', '#FAF5EE']
     });
 
-    showToast('🎉 Cart Optimized!', `Successfully saved ₹${report.totalSavings.toLocaleString('en-IN')} across your cart!`, 'success');
-
-    // Async persist to backend
-    catalogService.applyOptimizations(report.optimizations).catch(() => {});
+    showToast('🎉 Cart Optimized!', `Successfully saved ₹${savedAmount.toLocaleString('en-IN')} across your cart!`, 'success');
   };
 
-  // Wishlist operations
+  // ── Wishlist operations ───────────────────────────────────────────────────
   const toggleWishlist = (product: Product) => {
     const exists = wishlist.some(p => p.id === product.id);
     if (exists) {
@@ -612,14 +666,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('❤️ Saved to Wishlist', product.name.slice(0, 30) + '...', 'success');
       setWishlist(prev => [...prev, product]);
     }
-    catalogService.toggleWishlist(product.id).catch(() => {});
+
+    if (!liveRef.current) return;
+    catalogService.toggleWishlist(product.id)
+      .then(isSaved => {
+        // If the server disagrees with our optimistic guess (e.g. double-click race), trust the server.
+        if (isSaved === exists) syncWishlist();
+      })
+      .catch(err => {
+        showToast('Could not update wishlist', errorMessage(err, 'Please try again.'), 'warning');
+        syncWishlist();
+      });
   };
 
   const isInWishlist = (productId: string) => {
     return wishlist.some(p => p.id === productId);
   };
 
-  // Compare operations
+  // ── Compare operations ────────────────────────────────────────────────────
   const toggleCompare = (product: Product) => {
     setCompareList(prev => {
       const exists = prev.some(p => p.id === product.id);
@@ -647,50 +711,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCompareList([]);
   };
 
-  // Shopping Mission operations
+  // ── Shopping Mission operations ───────────────────────────────────────────
   const startMission = (missionId: string) => {
     const mission = missions.find(m => m.id === missionId);
     if (mission) {
       setActiveMission(mission);
       setIsMissionsModalOpen(true);
+    } else {
+      showToast('Mission unavailable', 'That shopping mission could not be found.', 'warning');
     }
   };
 
-  // Price Alerts
+  // ── Price Alerts ──────────────────────────────────────────────────────────
   const addPriceAlert = (product: Product, targetPrice: number) => {
-    const newAlert: PriceAlert = {
-      id: `alert-${Date.now()}`,
-      productId: product.id,
-      productName: product.name,
-      productImage: product.image,
-      currentPrice: product.currentPrice,
-      targetPrice,
-      store: product.store,
-      createdAt: 'Just now',
-      status: 'ACTIVE'
-    };
-    setPriceAlerts(prev => [newAlert, ...prev]);
-    showToast('🔔 Price Alert Activated', `We'll notify you when ${product.name.slice(0, 24)} drops to ₹${targetPrice}!`, 'success');
+    if (!liveRef.current) {
+      const localAlert: PriceAlert = {
+        id: `alert-${Date.now()}`,
+        productId: product.id,
+        productName: product.name,
+        productImage: product.image,
+        currentPrice: product.currentPrice,
+        targetPrice,
+        store: product.store,
+        createdAt: new Date().toLocaleDateString('en-IN'),
+        status: product.currentPrice <= targetPrice ? 'TRIGGERED' : 'ACTIVE'
+      };
+      setPriceAlerts(prev => [localAlert, ...prev.filter(a => a.productId !== product.id)]);
+      showToast('🔔 Price Alert Activated', `We'll notify you when ${product.name.slice(0, 24)} drops to ₹${targetPrice}!`, 'success');
+      return;
+    }
 
-    catalogService.createPriceAlert({
-      productId: product.id,
-      productName: product.name,
-      productImage: product.image,
-      currentPrice: product.currentPrice,
-      targetPrice,
-      store: product.store
-    }).catch(() => {});
+    catalogService.createPriceAlert(product.id, targetPrice)
+      .then(alert => {
+        // The server keeps one tracker per product, so replace any existing one.
+        setPriceAlerts(prev => [alert, ...prev.filter(a => a.id !== alert.id && a.productId !== alert.productId)]);
+        if (alert.status === 'TRIGGERED') {
+          showToast('🎯 Target Already Reached', `${product.name.slice(0, 24)} is already at or below ₹${targetPrice}!`, 'success');
+        } else {
+          showToast('🔔 Price Alert Activated', `We'll notify you when ${product.name.slice(0, 24)} drops to ₹${targetPrice}!`, 'success');
+        }
+      })
+      .catch(err => showToast('Could not create alert', errorMessage(err, 'Please try again.'), 'warning'));
   };
 
   const removePriceAlert = (alertId: string) => {
     setPriceAlerts(prev => prev.filter(a => a.id !== alertId));
     showToast('Price Alert Removed', 'Notification cancelled.', 'info');
-    catalogService.deletePriceAlert(alertId).catch(() => {});
+    if (!liveRef.current) return;
+    catalogService.deletePriceAlert(alertId).catch(err => {
+      showToast('Could not remove alert', errorMessage(err, 'Please try again.'), 'warning');
+      syncAlerts();
+    });
   };
 
-  // Shared List operations
+  // ── Shared List operations ────────────────────────────────────────────────
   const addSharedItem = (name: string, addedBy: string, category: string) => {
-    const matched = products.find(p => p.name?.toLowerCase().includes(name.toLowerCase()) || p.tags?.some(t => t.toLowerCase().includes(name.toLowerCase())));
+    const lowered = name.toLowerCase();
+    const matched = products.find(p => p.name?.toLowerCase().includes(lowered) || p.tags?.some(t => t.toLowerCase().includes(lowered)));
     const tempId = `shared-${Date.now()}`;
     const newItem: SharedListItem = {
       id: tempId,
@@ -704,29 +781,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSharedList(prev => [...prev, newItem]);
     showToast('Item Added to Shared List', `${name} added by ${addedBy}`, 'success');
 
-    catalogService.addSharedItem({
-      name,
-      addedBy,
-      category,
-      productId: matched?.id,
-      quantity: 1
-    }).then(res => {
-      if (res?.item?.id) {
-        setSharedList(prev => prev.map(item => item.id === tempId ? { ...item, id: res.item.id } : item));
-      }
-    }).catch(() => {});
+    if (!liveRef.current) return;
+    catalogService.addSharedItem({ name, addedBy, category, productId: matched?.id, quantity: 1 })
+      .then(serverItem => {
+        setSharedList(prev => prev.map(item => item.id === tempId ? serverItem : item));
+      })
+      .catch(err => {
+        setSharedList(prev => prev.filter(item => item.id !== tempId));
+        showToast('Could not add item', errorMessage(err, 'Please try again.'), 'warning');
+      });
   };
 
   const toggleSharedItemPurchased = (id: string) => {
-    let nextPurchased = false;
-    setSharedList(prev => prev.map(item => {
-      if (item.id === id) {
-        nextPurchased = !item.isPurchased;
-        return { ...item, isPurchased: nextPurchased };
-      }
-      return item;
-    }));
-    catalogService.toggleSharedItem(id, nextPurchased).catch(() => {});
+    setSharedList(prev => prev.map(item => item.id === id ? { ...item, isPurchased: !item.isPurchased } : item));
+
+    if (!liveRef.current) return;
+    catalogService.toggleSharedItem(id)
+      .then(isPurchased => {
+        setSharedList(prev => prev.map(item => item.id === id ? { ...item, isPurchased } : item));
+      })
+      .catch(err => {
+        showToast('Could not update item', errorMessage(err, 'Please try again.'), 'warning');
+        syncSharedList();
+      });
   };
 
   return (
@@ -746,6 +823,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSearching,
         refreshCatalog,
         isLiveBackend,
+        maxCatalogPrice,
 
         currentUser,
         setCurrentUser,

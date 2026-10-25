@@ -1,4 +1,4 @@
-import { Product } from '../types';
+import { Product } from '../types/index.js';
 
 export const MOCK_PRODUCTS: Product[] = [
   // 1. Black Purse / Handbag (Product Twin Group: TWIN-PURSE-01)

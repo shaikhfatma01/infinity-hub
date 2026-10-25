@@ -1,22 +1,24 @@
 import { Request, Response } from 'express';
 import { productService, ProductQueryFilters } from '../services/productService.js';
 import { SortOption } from '../types/index.js';
+import { toFiniteNumber, toInt } from '../utils/parse.js';
 
 export class ProductController {
   public async getProducts(req: Request, res: Response) {
+    const q = req.query;
     const filters: ProductQueryFilters = {
-      search: req.query.search as string,
-      category: req.query.category as string,
-      store: req.query.store as string,
-      minPrice: req.query.minPrice ? parseFloat(req.query.minPrice as string) : undefined,
-      maxPrice: req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : undefined,
-      minRating: req.query.minRating ? parseFloat(req.query.minRating as string) : undefined,
-      minDiscount: req.query.minDiscount ? parseFloat(req.query.minDiscount as string) : undefined,
-      onlyInStock: req.query.onlyInStock === 'true',
-      onlyTwins: req.query.onlyTwins === 'true',
-      sortBy: req.query.sortBy as SortOption,
-      page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
-      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 50,
+      search: typeof q.search === 'string' ? q.search : undefined,
+      category: typeof q.category === 'string' ? q.category : undefined,
+      store: typeof q.store === 'string' ? q.store : undefined,
+      minPrice: toFiniteNumber(q.minPrice),
+      maxPrice: toFiniteNumber(q.maxPrice),
+      minRating: toFiniteNumber(q.minRating),
+      minDiscount: toFiniteNumber(q.minDiscount),
+      onlyInStock: q.onlyInStock === 'true',
+      onlyTwins: q.onlyTwins === 'true',
+      sortBy: typeof q.sortBy === 'string' ? (q.sortBy as SortOption) : undefined,
+      page: toInt(q.page) ?? 1,
+      limit: toInt(q.limit) ?? 50,
     };
 
     const result = await productService.getProducts(filters);

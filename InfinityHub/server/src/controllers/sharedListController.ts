@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/db.js';
 import { deserializeProduct } from '../services/productService.js';
+import { badRequest, notFound } from '../utils/httpError.js';
+import { toInt } from '../utils/parse.js';
 
 export class SharedListController {
   public async getSharedLists(req: Request, res: Response) {
@@ -48,34 +50,46 @@ export class SharedListController {
   }
 
   public async addItem(req: Request, res: Response) {
-    const { name, addedBy, category } = req.body;
+    const { name, addedBy, category, productId } = req.body ?? {};
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, error: 'Item name is required.' });
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw badRequest('Item name is required.');
+    }
+    if (name.trim().length > 200) {
+      throw badRequest('Item name is too long (max 200 characters).');
+    }
+    const quantity = req.body?.quantity === undefined ? 1 : toInt(req.body.quantity);
+    if (quantity === undefined || quantity < 1 || quantity > 99) {
+      throw badRequest('quantity must be a whole number between 1 and 99.');
     }
 
     let list = await prisma.sharedList.findFirst();
     if (!list) {
       list = await prisma.sharedList.create({
-        data: { name: 'Family Grocery & Essentials', createdBy: addedBy || 'Fatma' },
+        data: { name: 'Family Grocery & Essentials', createdBy: (addedBy || 'Member').toString().trim() },
       });
     }
 
-    // Try to auto-match with a product in the catalog
-    const rawProducts = await prisma.product.findMany();
-    const lowerName = name.toLowerCase().trim();
-    const matched = rawProducts.find(p =>
-      p.name.toLowerCase().includes(lowerName) || p.tags.toLowerCase().includes(lowerName)
-    );
+    // Use the product the client already matched, otherwise try to auto-match by name/tags.
+    let matched = null as Awaited<ReturnType<typeof prisma.product.findUnique>>;
+    if (productId && typeof productId === 'string') {
+      matched = await prisma.product.findUnique({ where: { id: productId } });
+    }
+    if (!matched) {
+      const rawProducts = await prisma.product.findMany();
+      const lowerName = name.toLowerCase().trim();
+      matched =
+        rawProducts.find(p => p.name.toLowerCase().includes(lowerName) || p.tags.toLowerCase().includes(lowerName)) || null;
+    }
 
     const newItem = await prisma.sharedListItem.create({
       data: {
         listId: list.id,
         name: name.trim(),
-        addedBy: (addedBy || 'Member').trim(),
-        category: category || 'Grocery',
+        addedBy: (addedBy || 'Member').toString().trim().slice(0, 100),
+        category: (category || 'Grocery').toString().slice(0, 100),
         matchedProductId: matched?.id || null,
-        quantity: 1,
+        quantity,
         isPurchased: false,
       },
     });
@@ -84,7 +98,12 @@ export class SharedListController {
       success: true,
       message: `${newItem.name} added to shared list.`,
       data: {
-        ...newItem,
+        id: newItem.id,
+        name: newItem.name,
+        addedBy: newItem.addedBy,
+        category: newItem.category,
+        quantity: newItem.quantity,
+        isPurchased: newItem.isPurchased,
         matchedProduct: matched ? deserializeProduct(matched) : undefined,
       },
     });
@@ -95,7 +114,7 @@ export class SharedListController {
     const item = await prisma.sharedListItem.findUnique({ where: { id } });
 
     if (!item) {
-      return res.status(404).json({ success: false, error: 'Item not found in shared list.' });
+      throw notFound('Item not found in shared list.');
     }
 
     const updated = await prisma.sharedListItem.update({

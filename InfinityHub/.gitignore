@@ -10,3 +10,4 @@ server/*.db
 server/prisma/*.db
 *.log
 .DS_Store
+*.tsbuildinfo

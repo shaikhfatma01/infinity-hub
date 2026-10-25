@@ -3,6 +3,23 @@ import { config } from './config/index.js';
 import { connectDB, prisma } from './config/db.js';
 import { seedDatabase } from './prisma/seed.js';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ Unhandled promise rejection:', reason);
+});
+
+async function connectWithRetry(attempts = 5, delayMs = 3000) {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await connectWithRetry();
+      return;
+    } catch (err) {
+      if (i === attempts) throw err;
+      console.warn(`⏳ Database not ready (attempt ${i}/${attempts}). Retrying in ${delayMs / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 async function startServer() {
   try {
     if (config.isProduction && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
@@ -12,11 +29,12 @@ async function startServer() {
 
     // Verify database has products; if empty, seed automatically
     const count = await prisma.product.count();
-    if (count === 0) {
-      console.log('⚡ Product catalog empty. Auto-seeding initial database...');
+    const missionCount = await prisma.shoppingMission.count();
+    if (count === 0 || missionCount === 0) {
+      console.log('⚡ Product catalog or shopping missions empty. Auto-seeding initial database...');
       await seedDatabase();
     } else {
-      console.log(`📦 Database loaded with ${count} verified products.`);
+      console.log(`📦 Database loaded with ${count} verified products and ${missionCount} shopping missions.`);
     }
 
     const server = app.listen(config.port, () => {

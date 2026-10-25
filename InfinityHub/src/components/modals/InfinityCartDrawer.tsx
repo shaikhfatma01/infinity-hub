@@ -48,18 +48,22 @@ export const InfinityCartDrawer: React.FC = () => {
     return acc;
   }, {} as Record<StoreName, CartItem[]>);
 
-  const handleRunOptimizer = () => {
+  const handleRunOptimizer = async () => {
     setIsOptimizing(true);
-    setTimeout(() => {
-      const report = runCartOptimizer();
+    try {
+      const [report] = await Promise.all([
+        runCartOptimizer(),
+        new Promise(resolve => setTimeout(resolve, 500)) // brief "analysing" state so the UI feels deliberate
+      ]);
       setOptimizationReport(report);
+    } finally {
       setIsOptimizing(false);
-    }, 700);
+    }
   };
 
-  const handleApplyOptimizer = () => {
+  const handleApplyOptimizer = async () => {
     if (optimizationReport) {
-      applyCartOptimizations(optimizationReport);
+      await applyCartOptimizations(optimizationReport);
       setOptimizationReport(null);
     }
   };

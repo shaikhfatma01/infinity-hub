@@ -38,6 +38,22 @@ The API waits for MySQL to become healthy, applies the Prisma schema, then start
 
 - For a public deployment, terminate HTTPS at a trusted reverse proxy/load balancer and set `CLIENT_URL` to the public frontend origin.
 - Configure real provider credentials only in deployment environment secrets. The app's store adapters default to demo mode; demo mode is not a live retailer integration.
-- A Gemini key is optional. Without it, the application uses its local rule-based AI fallback.
+- A Gemini key is optional. Without it (or if the call fails), the application uses its local rule-based AI fallback. The model is set with `GEMINI_MODEL` (default `gemini-3.5-flash`); Google retired `gemini-2.0-flash` on 2026-06-01, so keep this value current.
 - The demo seed creates a demo account with a known starter password in the source. Do not use that account in production; remove or change it before exposing the app publicly.
 - If an API key or secret was ever committed or shared in an archive, revoke/rotate it. Keep `.env` files out of version control and archives.
+
+
+## How the pieces connect
+
+- **Browser → API:** the frontend calls `/api/*`. In development Vite proxies this to `http://localhost:5000`; in Docker nginx proxies it to the `api` container. Override with `VITE_API_BASE_URL` if the API lives elsewhere.
+- **API → database:** Prisma talks to MySQL via `DATABASE_URL`. On first start the server seeds the catalogue, shopping missions, shared list and a demo account (`fatma.shaikh@infinityhub.ai` / `Password123!`; change or remove it before a public launch).
+- **Guest vs signed-in:** every browser gets a random guest id (`x-guest-id`). Cart, wishlist and price alerts are stored against it, and are merged into the account when the visitor signs in or registers.
+- **Live vs offline indicator:** the top bar shows **Live data** when the API answered, or **Offline demo** when the frontend fell back to its bundled demo data (nothing is saved in that mode).
+- **Health:** `GET /api/health` returns `200` when the database answers and `503` when it does not.
+
+## Checks before deploying
+
+```bash
+npm run typecheck            # frontend
+cd server && npm run typecheck && npm run build   # backend (must compile; production runs dist/)
+```

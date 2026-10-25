@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import { alertController } from '../controllers/alertController.js';
 import { optionalAuth } from '../middleware/auth.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
-router.use(optionalAuth);
+router.use(asyncHandler(optionalAuth));
 
-router.get('/', alertController.getAlerts);
-router.post('/', alertController.createAlert);
-router.delete('/:id', alertController.deleteAlert);
-router.post('/check', alertController.checkAlerts);
+router.get('/', asyncHandler(alertController.getAlerts));
+router.post('/', asyncHandler(alertController.createAlert));
+router.post('/check', asyncHandler(alertController.checkAlerts));
+router.delete('/:id', asyncHandler(alertController.deleteAlert));
 
 export default router;

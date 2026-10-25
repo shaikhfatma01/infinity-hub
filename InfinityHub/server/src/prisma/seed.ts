@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { MOCK_PRODUCTS } from '../data/mockProducts.js';
 import { MOCK_SHOPPING_MISSIONS } from '../data/mockMissions.js';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/db.js';
 
 export async function seedDatabase() {
   console.log('🌱 Starting database seed...');
@@ -232,8 +233,10 @@ export async function seedDatabase() {
   console.log('✅ Database seed completed successfully!');
 }
 
-// Execute when run directly
-if (process.argv[1]?.includes('seed')) {
+// Execute only when this file is the entry point (e.g. `npm run db:seed`), never when imported by the server.
+const isDirectRun =
+  Boolean(process.argv[1]) && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1]);
+if (isDirectRun) {
   seedDatabase()
     .catch((err) => {
       console.error('❌ Error during seed:', err);

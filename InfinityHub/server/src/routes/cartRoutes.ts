@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { cartController } from '../controllers/cartController.js';
 import { optionalAuth } from '../middleware/auth.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 
 const router = Router();
 
-router.use(optionalAuth);
+router.use(asyncHandler(optionalAuth));
 
-router.get('/', cartController.getCart);
-router.post('/items', cartController.addItem);
-router.put('/items/:id', cartController.updateQuantity);
-router.delete('/items/:id', cartController.removeItem);
-router.get('/optimize', cartController.optimizeCart);
-router.post('/apply-optimizations', cartController.applyOptimizations);
+router.get('/', asyncHandler(cartController.getCart));
+router.post('/items', asyncHandler(cartController.addItem));
+router.put('/items/:id', asyncHandler(cartController.updateQuantity));
+router.delete('/items/:id', asyncHandler(cartController.removeItem));
+router.get('/optimize', asyncHandler(cartController.optimizeCart));
+router.post('/apply-optimizations', asyncHandler(cartController.applyOptimizations));
 
 export default router;

@@ -36,7 +36,9 @@ export const Navbar: React.FC = () => {
     setIsBuildLookModalOpen,
     searchQuery,
     setSearchQuery,
-    handleSearchSubmit
+    handleSearchSubmit,
+    isLiveBackend,
+    currentUser
   } = useApp();
 
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -58,6 +60,15 @@ export const Navbar: React.FC = () => {
             <span className="inline-flex items-center gap-1 bg-pink-500/20 text-pink-200 px-2 py-0.5 rounded-full text-[11px] font-medium border border-pink-400/30">
               <Sparkles className="w-3 h-3 text-pink-300 animate-pulse" />
               AI Multi-Store Engine
+            </span>
+            <span
+              title={isLiveBackend ? 'Connected to the InfinityHub server and database' : 'Server unreachable: showing bundled demo data'}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                isLiveBackend ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30' : 'bg-amber-500/15 text-amber-200 border-amber-400/30'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${isLiveBackend ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              {isLiveBackend ? 'Live data' : 'Offline demo'}
             </span>
             <span className="hidden md:inline text-cream-300 font-light">
               Aggregating live prices from Amazon, Flipkart, Myntra, Nykaa, Croma & 10+ stores
@@ -84,7 +95,7 @@ export const Navbar: React.FC = () => {
               className="hover:text-pink-300 transition-colors inline-flex items-center gap-1 cursor-pointer font-medium"
             >
               <User className="w-3.5 h-3.5" />
-              <span>Sign In / Profile</span>
+              <span>{currentUser ? currentUser.name : 'Sign In / Profile'}</span>
             </button>
           </div>
         </div>

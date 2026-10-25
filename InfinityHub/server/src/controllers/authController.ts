@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '../config/db.js';
 import { config } from '../config/index.js';
 import { cartService } from '../services/cartService.js';
-import { AuthenticatedRequest } from '../middleware/auth.js';
+import { AuthenticatedRequest, sanitizeGuestId } from '../middleware/auth.js';
 
 export const registerSchema = z.object({
   body: z.object({
@@ -61,11 +61,8 @@ export class AuthController {
       { expiresIn: config.jwtExpiresIn as any }
     );
 
-    // If a guest cart ID was provided, migrate it to the new user account
-    const guestId = req.headers['x-guest-id'] as string;
-    if (guestId) {
-      await cartService.migrateGuestCartToUser(guestId, user.id);
-    }
+    // Carry over anything the visitor did as a guest (cart, wishlist, price alerts)
+    await cartService.migrateGuestDataToUser(sanitizeGuestId(req.headers['x-guest-id']), user.id);
 
     res.status(201).json({
       success: true,
@@ -104,11 +101,8 @@ export class AuthController {
       { expiresIn: config.jwtExpiresIn as any }
     );
 
-    // Migrate guest cart if header exists
-    const guestId = req.headers['x-guest-id'] as string;
-    if (guestId) {
-      await cartService.migrateGuestCartToUser(guestId, user.id);
-    }
+    // Carry over anything the visitor did as a guest (cart, wishlist, price alerts)
+    await cartService.migrateGuestDataToUser(sanitizeGuestId(req.headers['x-guest-id']), user.id);
 
     res.json({
       success: true,

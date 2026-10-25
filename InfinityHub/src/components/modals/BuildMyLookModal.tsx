@@ -28,61 +28,84 @@ export const BuildMyLookModal: React.FC = () => {
 
   if (!isBuildLookModalOpen) return null;
 
-  // Outfit pieces based on mode
-  const outfitPieces = [
-    {
-      type: 'Structured Handbag / Purse',
-      store: 'Myntra',
-      name: lookMode === 'cheaper' 
-        ? 'Baggit Everyday Tote' 
-        : lookMode === 'premium' 
-        ? 'Michael Kors Jet Set Tote' 
-        : 'Lavie Luxe Black Vegan Satchel',
-      price: lookMode === 'cheaper' ? 599 : lookMode === 'premium' ? 3499 : 899,
-      image: products[0]?.image || 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      type: 'Comfortable Athletic Footwear',
-      store: 'Myntra',
-      name: lookMode === 'cheaper' 
-        ? 'Red Tape Athleisure Sneaker' 
-        : lookMode === 'premium' 
-        ? 'Nike Air Jordan Retro' 
-        : 'Nike Air Max Excee Running Shoes',
-      price: lookMode === 'cheaper' ? 1299 : lookMode === 'premium' ? 8995 : 4599,
-      image: products[3]?.image || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      type: 'Smart Biometric Accessory',
-      store: 'Amazon',
-      name: lookMode === 'cheaper' 
-        ? 'Fastrack Reflex Beat Watch' 
-        : lookMode === 'premium' 
-        ? 'Apple Watch SE GPS' 
-        : 'Noise ColorFit Pro 5 Max AMOLED',
-      price: lookMode === 'cheaper' ? 1199 : lookMode === 'premium' ? 24900 : 2999,
-      image: products[6]?.image || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      type: 'Daily Glow Skincare Protection',
-      store: 'Nykaa',
-      name: 'The Derma Co 1% Hyaluronic Sunscreen SPF 50',
-      price: 429,
-      image: products[4]?.image || 'https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=400&q=80',
-    }
+  // Looks the catalogue by id (never by position) so each piece shows and adds the right product.
+  const byId = (id: string) => products.find(p => p.id === id);
+
+  interface LookPiece {
+    type: string;
+    store: string;
+    name: string;
+    price: number;
+    image: string;
+    /** Catalogue product this piece maps to; undefined for style-only suggestions. */
+    productId?: string;
+  }
+
+  const catalogPiece = (type: string, id: string, fallbackImage: string): LookPiece => {
+    const p = byId(id);
+    return {
+      type,
+      store: p?.store ?? '—',
+      name: p?.name ?? 'Currently unavailable',
+      price: p?.finalEstimatedPrice ?? 0,
+      image: p?.image ?? fallbackImage,
+      productId: p ? p.id : undefined,
+    };
+  };
+
+  const suggestion = (type: string, store: string, name: string, price: number, image: string): LookPiece => ({
+    type, store, name, price, image,
+  });
+
+  // Balanced = real catalogue products. Cheaper/Luxury are style suggestions that are not
+  // in the catalogue, so they are labelled as such and cannot be added to the cart.
+  const outfitPieces: LookPiece[] = [
+    lookMode === 'cheaper'
+      ? suggestion('Structured Handbag / Purse', 'Myntra', 'Baggit Everyday Tote', 599, byId('prod-purse-myntra')?.image ?? '')
+      : lookMode === 'premium'
+      ? suggestion('Structured Handbag / Purse', 'Myntra', 'Michael Kors Jet Set Tote', 3499, byId('prod-purse-myntra')?.image ?? '')
+      : catalogPiece('Structured Handbag / Purse', 'prod-purse-myntra', ''),
+    lookMode === 'cheaper'
+      ? suggestion('Comfortable Athletic Footwear', 'Myntra', 'Red Tape Athleisure Sneaker', 1299, byId('prod-shoes-myntra')?.image ?? '')
+      : lookMode === 'premium'
+      ? suggestion('Comfortable Athletic Footwear', 'Myntra', 'Nike Air Jordan Retro', 8995, byId('prod-shoes-myntra')?.image ?? '')
+      : catalogPiece('Comfortable Athletic Footwear', 'prod-shoes-myntra', ''),
+    lookMode === 'cheaper'
+      ? suggestion('Smart Biometric Accessory', 'Amazon', 'Fastrack Reflex Beat Watch', 1199, byId('prod-watch-amazon')?.image ?? '')
+      : lookMode === 'premium'
+      ? suggestion('Smart Biometric Accessory', 'Amazon', 'Apple Watch SE GPS', 24900, byId('prod-watch-amazon')?.image ?? '')
+      : catalogPiece('Smart Biometric Accessory', 'prod-watch-amazon', ''),
+    catalogPiece('Daily Glow Skincare Protection', 'prod-skincare-nykaa', ''),
   ];
 
   const totalCost = outfitPieces.reduce((sum, p) => sum + p.price, 0);
+  const addablePieces = outfitPieces.filter(p => p.productId);
+  const addableTotal = addablePieces.reduce((sum, p) => sum + p.price, 0);
 
   const handleAddLookToCart = () => {
+    if (addablePieces.length === 0) {
+      showToast('Nothing to add', 'This look has no catalogue items available right now.', 'warning');
+      return;
+    }
+
     confetti({
       particleCount: 70,
       spread: 60,
       origin: { y: 0.6 }
     });
 
-    products.slice(0, 3).forEach(p => addToCart(p));
-    showToast('👗 Complete Look Added!', `4 items added to your Infinity Cart for ₹${totalCost.toLocaleString('en-IN')}`, 'success');
+    addablePieces.forEach(piece => {
+      const product = byId(piece.productId!);
+      if (product) addToCart(product);
+    });
+
+    const skipped = outfitPieces.length - addablePieces.length;
+    showToast(
+      '👗 Look Added!',
+      `${addablePieces.length} catalogue item${addablePieces.length === 1 ? '' : 's'} added for ₹${addableTotal.toLocaleString('en-IN')}.` +
+        (skipped > 0 ? ` ${skipped} style suggestion${skipped === 1 ? ' is' : 's are'} not in the catalogue.` : ''),
+      'success'
+    );
     setIsBuildLookModalOpen(false);
     setIsCartOpen(true);
   };
@@ -163,6 +186,11 @@ export const BuildMyLookModal: React.FC = () => {
                     <img src={piece.image} alt={piece.name} className="max-h-full max-w-full object-contain mix-blend-multiply" />
                   </div>
                   <span className="text-[10px] font-extrabold uppercase text-pink-600 block">{piece.type}</span>
+                  {!piece.productId && (
+                    <span className="text-[9px] font-bold uppercase text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 inline-block mt-0.5">
+                      Style suggestion · not in catalogue
+                    </span>
+                  )}
                   <h4 className="font-serif text-xs font-bold text-chocolate-950 line-clamp-2 mt-0.5">{piece.name}</h4>
                 </div>
 
@@ -180,7 +208,9 @@ export const BuildMyLookModal: React.FC = () => {
               <span className="text-xs font-bold text-chocolate-600 uppercase tracking-wider block">Coordinated Total Cost:</span>
               <span className="font-serif text-3xl font-bold text-chocolate-950">₹{totalCost.toLocaleString('en-IN')}</span>
               <span className="text-xs text-emerald-700 font-bold block mt-0.5">
-                ✓ Includes Best Deal matching across 3 stores
+                {addablePieces.length === outfitPieces.length
+                  ? `✓ All ${outfitPieces.length} pieces are verified catalogue items`
+                  : `✓ ${addablePieces.length} of ${outfitPieces.length} pieces can be added to your cart`}
               </span>
             </div>
 
@@ -189,7 +219,7 @@ export const BuildMyLookModal: React.FC = () => {
               className="w-full sm:w-auto px-8 py-3 rounded-2xl bg-chocolate-900 hover:bg-chocolate-800 text-cream-50 text-xs sm:text-sm font-bold shadow-md hover:shadow-choc-glow transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4 text-pink-300" />
-              <span>Add Complete Look to Cart</span>
+              <span>{addablePieces.length === outfitPieces.length ? 'Add Complete Look to Cart' : `Add ${addablePieces.length} Catalogue Items to Cart`}</span>
             </button>
           </div>
 
