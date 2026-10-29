@@ -9,7 +9,7 @@ This project uses a React + Vite frontend, an Express/TypeScript API, Prisma ORM
 3. Copy the **Direct connection** string (port `5432`) into `DIRECT_URL`. Prisma uses this URL for schema changes. If your network cannot reach the direct host, use Supabase's **Session pooler** connection string for this URL instead.
 4. URL-encode special characters in the database password (for example, `@` as `%40` and `#` as `%23`). Keep both URLs private and never commit `.env` files.
 
-The app's current MySQL data is not copied automatically. The first run creates the schema in Supabase and seeds the demo catalogue if it is empty. Export and migrate any MySQL data you need to keep before switching production traffic.
+The app's current MySQL data is not copied automatically. Docker and the long-running API apply the schema and seed the demo catalogue on startup. Vercel Functions require the schema and any optional demo data to be initialized manually as described below. Export and migrate any MySQL data you need to keep before switching production traffic.
 
 ## Administrator access
 
@@ -68,16 +68,25 @@ The API applies the Prisma schema using `DIRECT_URL`, then starts and seeds the 
 - The demo seed creates a demo account with a known starter password in the source. Do not use that account in production; remove or change it before exposing the app publicly.
 - If an API key or secret was ever committed or shared in an archive, revoke/rotate it. Keep all `.env` files private.
 
-## Deploy the frontend to Vercel and API to Render
+## Deploy the full app to Vercel
 
-This repository includes a Vercel configuration for the Vite frontend (`vercel.json`) and a Render Blueprint for the Express API (`render.yaml`). Deploy the API first:
+The Vercel project serves the Vite frontend and the Express API as Node.js Functions from the same origin. `vercel.json` configures the frontend build and SPA fallback; `api/` routes forward API requests to the compiled Express app.
 
-1. In Render, create a **Blueprint** from this GitHub repository and provide the Supabase Transaction pooler URL as `DATABASE_URL`, the Direct connection URL as `DIRECT_URL`, and your future Vercel site origin as `CLIENT_URL`. Render generates `JWT_SECRET`.
-2. The API start command applies the Prisma schema before launching. Back up any existing production data before deploying schema changes.
-3. Wait for the Render service to become healthy. Its API base URL will be similar to `https://infinityhub-api.onrender.com`.
-4. In Vercel, import this GitHub repository with the project root set to the repository root. Set `VITE_API_BASE_URL` to the Render API URL followed by `/api` (for example, `https://infinityhub-api.onrender.com/api`), then deploy or redeploy.
-5. Set Render's `CLIENT_URL` to the exact Vercel site origin (for example, `https://infinity-hub.vercel.app`, without a trailing slash), then redeploy the API.
-6. Check `https://<your-api-host>/api/health` and open the Vercel site. Add any optional provider keys only in the hosting provider's environment settings.
+1. Import this repository into Vercel with the repository root as the project root. The build command is `npm run build:vercel` and the output directory is `dist`.
+2. Add these environment variables to the Vercel project for Production (and Preview if needed):
+   - `DATABASE_URL`: Supabase Transaction pooler connection URL.
+   - `DIRECT_URL`: Supabase Direct connection URL.
+   - `JWT_SECRET`: a private random value with at least 32 characters.
+3. Before the first deployment, set `DATABASE_URL` and `DIRECT_URL` in the ignored `server/.env` file and apply the Prisma schema from the repository root:
+
+   ```bash
+   npm run db:push
+   ```
+
+   Back up any existing production data before applying schema changes.
+4. If you want the demo catalogue, seed it once with `npm run db:seed`. This also creates the demo account with the known starter password described above; do not expose that account publicly. Seeding is not automatic on Vercel.
+5. Deploy from Vercel. The frontend calls the API at `/api` on the same origin, so no `VITE_API_BASE_URL` or separate API host is required.
+6. Verify `https://<your-vercel-domain>/api/health`. Add optional provider credentials only in Vercel's environment settings.
 
 ## How the pieces connect
 

@@ -3,10 +3,16 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "server"
+  ],
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
+    "build:vercel": "npm run db:generate --workspace=infinityhub-server && npm run build && npm run build --workspace=infinityhub-server",
+    "db:push": "npm run db:push --workspace=infinityhub-server",
+    "db:seed": "npm run db:seed --workspace=infinityhub-server",
     "preview": "vite preview"
   },
   "dependencies": {
