@@ -18,6 +18,7 @@ import aiRoutes from './routes/aiRoutes.js';
 import visualSearchRoutes from './routes/visualSearchRoutes.js';
 import sharedListRoutes from './routes/sharedListRoutes.js';
 import providerRoutes from './routes/providerRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 export const app = express();
 
@@ -56,6 +57,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/search/visual', visualSearchRoutes);
 app.use('/api/shared-lists', sharedListRoutes);
 app.use('/api/providers', providerRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Catch-all 404 handler for API routes
 app.use('/api', (req, res) => {

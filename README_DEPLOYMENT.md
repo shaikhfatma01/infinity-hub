@@ -11,6 +11,23 @@ This project uses a React + Vite frontend, an Express/TypeScript API, Prisma ORM
 
 The app's current MySQL data is not copied automatically. The first run creates the schema in Supabase and seeds the demo catalogue if it is empty. Export and migrate any MySQL data you need to keep before switching production traffic.
 
+## Administrator access
+
+The Admin Panel lists registered account names, email addresses, roles, and account dates. Passwords and password hashes are never returned. The user-list API requires a signed-in account whose database role is `ADMIN`; registering an account cannot grant this role.
+
+1. Register your own account and sign in once.
+2. In the Supabase SQL Editor, promote only your trusted account by replacing the email below:
+
+   ```sql
+   UPDATE "User"
+   SET role = 'ADMIN'
+   WHERE email = 'your-trusted-email@example.com';
+   ```
+
+3. Confirm that one row was updated, then sign out and sign back in. The **Admin Panel** button will appear in the top bar.
+
+Do not promote the seeded demo account or any email address you do not control. Keep admin credentials private and remove the `ADMIN` role from accounts that no longer need access.
+
 ## Run with Docker
 
 1. Install Docker Desktop (Windows/macOS) or Docker Engine + Compose (Linux).

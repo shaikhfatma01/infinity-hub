@@ -74,6 +74,24 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
  * A token that is present but invalid/expired is rejected with 401 rather than silently
  * downgraded to a guest, so clients can detect it and ask the user to sign in again.
  */
+export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Authentication token is required.',
+    });
+  }
+
+  if (req.user.role !== 'ADMIN') {
+    return res.status(403).json({
+      success: false,
+      error: 'Forbidden: Administrator access is required.',
+    });
+  }
+
+  next();
+}
+
 export async function optionalAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     req.guestId = sanitizeGuestId(req.headers['x-guest-id']);

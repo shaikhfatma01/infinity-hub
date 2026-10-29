@@ -10,7 +10,7 @@ process.on('unhandledRejection', (reason) => {
 async function connectWithRetry(attempts = 5, delayMs = 3000) {
   for (let i = 1; i <= attempts; i++) {
     try {
-      await connectWithRetry();
+      await connectDB();
       return;
     } catch (err) {
       if (i === attempts) throw err;

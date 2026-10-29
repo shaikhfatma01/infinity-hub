@@ -13,7 +13,8 @@ import {
   Layers,
   Mic,
   Camera,
-  ShoppingBasket
+  ShoppingBasket,
+  ShieldCheck
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
@@ -76,6 +77,19 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4 text-cream-200">
+            {currentUser?.role === 'ADMIN' && (
+              <>
+                <button
+                  onClick={() => setActiveTab('admin')}
+                  aria-current={activeTab === 'admin' ? 'page' : undefined}
+                  className={`inline-flex items-center gap-1 font-medium transition-colors ${activeTab === 'admin' ? 'text-pink-300' : 'hover:text-pink-300'}`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Admin Panel</span>
+                </button>
+                <span className="hidden sm:inline text-chocolate-700">|</span>
+              </>
+            )}
             <button 
               onClick={() => setIsBuildLookModalOpen(true)}
               className="hover:text-pink-300 transition-colors hidden sm:inline-flex items-center gap-1 cursor-pointer"

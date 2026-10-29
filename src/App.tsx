@@ -32,6 +32,7 @@ import { WishlistModal } from './components/modals/WishlistModal';
 import { PriceAlertModal } from './components/modals/PriceAlertModal';
 import { SharedShoppingListModal } from './components/modals/SharedShoppingListModal';
 import { UserProfileModal } from './components/modals/UserProfileModal';
+import { AdminUsersPage } from './components/admin/AdminUsersPage';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useApp();
@@ -53,6 +54,7 @@ const MainContent: React.FC = () => {
       {activeTab === 'missions' && <ShoppingMissionsView />}
       {activeTab === 'deals' && <DealsPageView />}
       {activeTab === 'grocery' && <GroceryValueEngineView />}
+      {activeTab === 'admin' && <AdminUsersPage />}
 
       {/* Global Modals & Drawers */}
       <ProductDetailModal />
