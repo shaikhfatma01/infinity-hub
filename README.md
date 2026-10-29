@@ -78,7 +78,7 @@ See [`README_DEPLOYMENT.md`](README_DEPLOYMENT.md) for full instructions. In sho
 3. Run `docker compose up --build -d`.
 4. Open `http://localhost:8080`; check `http://localhost:8080/api/health` for API/database status.
 
-The API applies the Prisma schema to Supabase on startup and seeds the initial demo catalogue if it is empty. Keep all `.env` files private and do not commit secrets. See `README_DEPLOYMENT.md` for Supabase setup and existing-data migration notes.
+The Docker API applies the Prisma schema to Supabase on startup and seeds the initial demo catalogue if it is empty. Keep all `.env` files private and do not commit secrets. See `README_DEPLOYMENT.md` for Supabase setup and deployment options.
 
 ### Local development
 

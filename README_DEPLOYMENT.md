@@ -68,6 +68,17 @@ The API applies the Prisma schema using `DIRECT_URL`, then starts and seeds the 
 - The demo seed creates a demo account with a known starter password in the source. Do not use that account in production; remove or change it before exposing the app publicly.
 - If an API key or secret was ever committed or shared in an archive, revoke/rotate it. Keep all `.env` files private.
 
+## Deploy the frontend to Vercel and API to Render
+
+This repository includes a Vercel configuration for the Vite frontend (`vercel.json`) and a Render Blueprint for the Express API (`render.yaml`). Deploy the API first:
+
+1. In Render, create a **Blueprint** from this GitHub repository and provide the Supabase Transaction pooler URL as `DATABASE_URL`, the Direct connection URL as `DIRECT_URL`, and your future Vercel site origin as `CLIENT_URL`. Render generates `JWT_SECRET`.
+2. The API start command applies the Prisma schema before launching. Back up any existing production data before deploying schema changes.
+3. Wait for the Render service to become healthy. Its API base URL will be similar to `https://infinityhub-api.onrender.com`.
+4. In Vercel, import this GitHub repository with the project root set to the repository root. Set `VITE_API_BASE_URL` to the Render API URL followed by `/api` (for example, `https://infinityhub-api.onrender.com/api`), then deploy or redeploy.
+5. Set Render's `CLIENT_URL` to the exact Vercel site origin (for example, `https://infinity-hub.vercel.app`, without a trailing slash), then redeploy the API.
+6. Check `https://<your-api-host>/api/health` and open the Vercel site. Add any optional provider keys only in the hosting provider's environment settings.
+
 ## How the pieces connect
 
 - **Browser → API:** the frontend calls `/api/*`. In development Vite proxies this to `http://localhost:5000`; in Docker nginx proxies it to the `api` container. Override with `VITE_API_BASE_URL` if the API lives elsewhere.
