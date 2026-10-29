@@ -7,7 +7,7 @@ export const prisma = new PrismaClient({
 export async function connectDB() {
   try {
     await prisma.$connect();
-    console.log('✅ MySQL/Prisma Database connection established successfully.');
+    console.log('✅ PostgreSQL/Prisma database connection established successfully.');
   } catch (err) {
     console.error('❌ Failed to connect to database:', err);
     throw err;

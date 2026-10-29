@@ -31,7 +31,7 @@ router.get(
       uptimeSeconds: Math.floor(process.uptime()),
       environment: config.nodeEnv,
       database: {
-        provider: 'MySQL (Prisma ORM)',
+        provider: 'Supabase Postgres (Prisma ORM)',
         status: dbStatus,
         productsIndexed: productCount,
       },

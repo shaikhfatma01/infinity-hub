@@ -65,21 +65,27 @@ npm run preview
 - Decathlon
 - IKEA
 
-## 🗄️ Backend, MySQL & Docker
+## 🗄️ Backend, Supabase & Docker
 
-The repository includes an Express/TypeScript backend in `server/` and Prisma ORM configured for **MySQL 8**. The frontend uses `/api` and Docker's Nginx configuration proxies API requests to the backend service.
+The repository includes an Express/TypeScript backend in `server/` and Prisma ORM configured for **Supabase Postgres**. The frontend uses `/api` and Docker's Nginx configuration proxies API requests to the backend service.
 
 ### Recommended: Docker deployment
 
 See [`README_DEPLOYMENT.md`](README_DEPLOYMENT.md) for full instructions. In short:
 
 1. Copy `.env.docker.example` to `.env` in the project root.
-2. Set strong unique MySQL passwords and a random `JWT_SECRET` of at least 32 characters.
+2. Set `DATABASE_URL` to your Supabase Transaction pooler URL, `DIRECT_URL` to your Supabase Direct connection URL, and a random `JWT_SECRET` of at least 32 characters.
 3. Run `docker compose up --build -d`.
 4. Open `http://localhost:8080`; check `http://localhost:8080/api/health` for API/database status.
 
-MySQL data is persisted in the `mysql_data` Docker volume. The API applies the Prisma schema on startup and seeds the initial demo catalogue if it is empty. Keep all `.env` files private and do not commit secrets.
+The API applies the Prisma schema to Supabase on startup and seeds the initial demo catalogue if it is empty. Keep all `.env` files private and do not commit secrets. See `README_DEPLOYMENT.md` for Supabase setup and existing-data migration notes.
 
 ### Local development
 
-For frontend-only development, `npm ci && npm run dev` starts Vite on port 3000. To use persistent data, also configure MySQL and `server/.env` as documented in `README_DEPLOYMENT.md`, then start the backend from `server/` with `npm run dev`.
+For frontend-only development, `npm ci && npm run dev` starts Vite on port 3000. To use persistent data, configure the Supabase connection URLs in `server/.env` as documented in `README_DEPLOYMENT.md`, then start the backend from `server/` with `npm run dev`.
+
+### Postman API testing
+
+Import `server/postman/InfinityHub.postman_collection.json` and `server/postman/InfinityHub.local.postman_environment.json` into Postman, then select the **InfinityHub Local API** environment. Start the API with `cd server && npm run dev`. Run **Health and Catalog → Health check (Supabase connection)**, then **List products** to verify the database and initialize the product ID variable.
+
+To test persistence, run **Authentication → Register viva test user** (it creates a new test account and saves its bearer token), then **Cart (Supabase persistence) → Add product to cart** and **Get cart**. The account and cart records are persisted to Supabase Postgres. For a registered account you already have, set the collection variables `loginEmail` and `loginPassword`, then run **Login** instead. The collection covers all registered API routes; requests that change data are grouped separately for optional testing.

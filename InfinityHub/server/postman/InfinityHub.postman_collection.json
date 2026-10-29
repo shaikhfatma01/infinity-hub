@@ -1,0 +1,452 @@
+{
+  "info": {
+    "_postman_id": "8ca2dcf8-8cb7-4a2d-b1ab-7e2a8b8d5c11",
+    "name": "InfinityHub API",
+    "description": "API test requests for the InfinityHub Express backend and Supabase Postgres. Start the backend, import this collection and the companion local environment, then run Health and Catalog > List products before other product/cart requests. Register a test user to save a bearer token automatically. No Supabase API keys are needed in Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "guestId", "value": "postman-viva-guest" },
+    { "key": "token", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "cartItemId", "value": "" },
+    { "key": "alertId", "value": "" },
+    { "key": "sharedListItemId", "value": "" },
+    { "key": "missionId", "value": "" },
+    { "key": "loginEmail", "value": "" },
+    { "key": "loginPassword", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health and Catalog",
+      "item": [
+        {
+          "name": "Health check (Supabase connection)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health",
+            "description": "Confirms the API and database connection. A healthy response reports Supabase Postgres and productsIndexed."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API is healthy', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Database is connected', () => pm.expect(body.database.status).to.eql('connected'));",
+                  "pm.test('Database is Supabase Postgres', () => pm.expect(body.database.provider).to.include('Supabase Postgres'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List products (saves productId)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products?limit=20&page=1",
+            "description": "Lists catalog records and saves the first product ID for product, cart, wishlist, and price-alert requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Products loaded', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Product list has the expected shape', () => pm.expect(body).to.have.property('products'));",
+                  "if (body.products && body.products.length) pm.collectionVariables.set('productId', body.products[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filter products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products?search=shoes&maxPrice=10000&minRating=3&page=1&limit=10"
+          }
+        },
+        {
+          "name": "Product categories",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/products/categories" }
+        },
+        {
+          "name": "Product stores",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/products/stores" }
+        },
+        {
+          "name": "Get product by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/products/{{productId}}" }
+        },
+        {
+          "name": "Get product twins",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/products/{{productId}}/twins" }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register viva test user (saves token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{testName}}\",\n  \"email\": \"viva-{{$timestamp}}@example.com\",\n  \"password\": \"{{testPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Creates a throwaway viva test account in the app's public User table (not Supabase Auth) and stores its token. Re-running creates another account."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registration succeeded', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('token', body.token);",
+                  "const sent = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));",
+                  "pm.collectionVariables.set('loginEmail', sent.email);",
+                  "pm.collectionVariables.set('loginPassword', sent.password);",
+                  "if (body.user) pm.collectionVariables.set('userId', body.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (saves token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login succeeded', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.token) pm.collectionVariables.set('token', body.token);",
+                  "if (body.user) pm.collectionVariables.set('userId', body.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get signed-in user",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/auth/me"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cart (Supabase persistence)",
+      "item": [
+        {
+          "name": "Get cart",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cart",
+            "description": "Reads the signed-in user's cart and saves the first cartItemId when one exists."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cart loaded', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.items && body.data.items.length) pm.collectionVariables.set('cartItemId', body.data.items[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add product to cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1,\n  \"store\": \"Amazon\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/cart/items"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cart item saved', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.id) pm.collectionVariables.set('cartItemId', body.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update cart item quantity",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 2\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/cart/items/{{cartItemId}}"
+          }
+        },
+        {
+          "name": "Optimize cart",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cart/optimize"
+          }
+        },
+        {
+          "name": "Apply cart optimizations",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cart/apply-optimizations"
+          }
+        },
+        {
+          "name": "Remove cart item",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/cart/items/{{cartItemId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Wishlist and Price Alerts",
+      "item": [
+        {
+          "name": "Get wishlist",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/wishlist" }
+        },
+        {
+          "name": "Toggle product in wishlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": \"{{productId}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/wishlist/toggle"
+          }
+        },
+        {
+          "name": "Remove product from wishlist",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/wishlist/{{productId}}" }
+        },
+        {
+          "name": "List price alerts",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/alerts" }
+        },
+        {
+          "name": "Create price alert (saves alertId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"targetPrice\": 1\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/alerts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Price alert created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.id) pm.collectionVariables.set('alertId', body.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check price alerts",
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/alerts/check" }
+        },
+        {
+          "name": "Delete price alert",
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{baseUrl}}/api/alerts/{{alertId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Missions, Grocery, AI, and Visual Search",
+      "item": [
+        {
+          "name": "List shopping missions",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/missions" },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const missions = body.data || body.missions || [];",
+                  "if (missions.length && missions[0].id) pm.collectionVariables.set('missionId', missions[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get mission by ID",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/missions/{{missionId}}" }
+        },
+        {
+          "name": "Grocery unit comparisons",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/grocery/compare" }
+        },
+        {
+          "name": "Ask shopping AI",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Find a good laptop for college under 60000\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/ai/chat"
+          }
+        },
+        {
+          "name": "Visual search by preset",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/search/visual/preset?query=handbag" }
+        },
+        {
+          "name": "Visual search by image upload",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "image", "type": "file", "src": "" }]
+            },
+            "url": "{{baseUrl}}/api/search/visual/upload",
+            "description": "Select an image file for the image-search request. Postman will set the multipart boundary."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shared Lists and Store Providers",
+      "item": [
+        {
+          "name": "Get shared list",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/shared-lists" }
+        },
+        {
+          "name": "Add shared-list item (saves sharedListItemId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Viva test item\",\n  \"addedBy\": \"{{testName}}\",\n  \"category\": \"Grocery\",\n  \"quantity\": 1,\n  \"productId\": \"{{productId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/shared-lists/items"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Shared-list item added', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "if (body.data && body.data.id) pm.collectionVariables.set('sharedListItemId', body.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Toggle shared-list item purchased",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": "{{baseUrl}}/api/shared-lists/items/{{sharedListItemId}}/toggle"
+          }
+        },
+        {
+          "name": "Remove shared-list item",
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/shared-lists/items/{{sharedListItemId}}" }
+        },
+        {
+          "name": "List store providers",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/providers" }
+        },
+        {
+          "name": "Get provider by store",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/providers/Amazon" }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.request.headers.upsert({ key: 'x-guest-id', value: pm.collectionVariables.get('guestId') || 'postman-viva-guest' });"
+        ]
+      }
+    }
+  ]
+}
